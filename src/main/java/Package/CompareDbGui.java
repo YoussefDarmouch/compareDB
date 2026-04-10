@@ -1,3 +1,5 @@
+package Package;
+
 import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.text.*;
@@ -21,16 +23,13 @@ public class CompareDbGui extends JFrame {
     private static final Color TEXT_PRI   = new Color(18, 18, 18);
     private static final Color TEXT_SEC   = new Color(110, 110, 110);
     private static final Color TEXT_TER   = new Color(160, 160, 160);
-    private static final Color ACCENT_B   = new Color(56, 138, 221);   // DB1 badge
-    private static final Color ACCENT_G   = new Color(31, 158, 117);   // DB2 badge
+    private static final Color ACCENT_B   = new Color(56, 138, 221);
+    private static final Color ACCENT_G   = new Color(31, 158, 117);
     private static final Color CHIP_IDLE  = new Color(240, 240, 238);
     private static final Color CHIP_IDLEB = new Color(200, 200, 198);
     private static final Color CHIP_ON    = new Color(219, 234, 254);
     private static final Color CHIP_ONT   = new Color(24, 95, 165);
     private static final Color CHIP_ONB   = new Color(147, 197, 253);
-    private static final Color OUT_OK     = new Color(74, 222, 128);
-    private static final Color OUT_DIFF   = new Color(248, 113, 113);
-    private static final Color OUT_HEAD   = new Color(250, 250, 250);
     private static final Color OUT_DEFAULT= new Color(200, 200, 200);
     private static final Color BTN_PRI_BG = new Color(18, 18, 18);
     private static final Color BTN_PRI_FG = Color.WHITE;
@@ -203,7 +202,6 @@ public class CompareDbGui extends JFrame {
         p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
         p.setOpaque(false);
 
-        // Header row with badge
         JPanel hdrRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         hdrRow.setOpaque(false);
 
@@ -239,7 +237,6 @@ public class CompareDbGui extends JFrame {
         return p;
     }
 
-    /** labelWidth==0 → no port field */
     private JPanel fieldRow(String labelText, JComponent mainField, JTextField portField, int portWidth) {
         JPanel row = new JPanel(new BorderLayout(0, 0));
         row.setOpaque(false);
@@ -293,6 +290,10 @@ public class CompareDbGui extends JFrame {
         p.add(clearBtn);
         p.add(Box.createHorizontalGlue());
         return p;
+    }
+    // remove color ansi
+    private String removeAnsiCodes(String text) {
+        return text.replaceAll("\\u001B\\[[;\\d]*m", "");
     }
 
     // ── Output card ───────────────────────────────────────────────────────────
@@ -362,7 +363,7 @@ public class CompareDbGui extends JFrame {
         runBtn.addActionListener(e -> runComparison());
     }
 
-    // ── Comparison logic (unchanged from original) ────────────────────────────
+    // ── Comparison logic ──────────────────────────────────────────────────────
 
     private void runComparison() {
         String db1 = db1NameField.getText().trim();
@@ -390,12 +391,12 @@ public class CompareDbGui extends JFrame {
             @Override protected void done() {
                 try {
                     String out = get();
-                    renderColoredOutput(out.trim().isEmpty() ? "No output generated." : out);
+                    displayOutput(out.trim().isEmpty() ? "No output generated." : out);
                     statusDot.setColor(STATUS_OK);
                     statusLabel.setText("Comparison completed");
                     tsLabel.setText(new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date()));
                 } catch (Exception ex) {
-                    renderColoredOutput("Error: " + ex.getMessage());
+                    displayOutput("Error: " + ex.getMessage());
                     statusDot.setColor(new Color(239, 68, 68));
                     statusLabel.setText("Comparison failed");
                 } finally {
@@ -406,12 +407,12 @@ public class CompareDbGui extends JFrame {
     }
 
     private DbConnectionFactory.DbConfig buildDbConfig(String name, JTextField host,
-            JTextField port, JTextField user, JPasswordField pass) {
+                                                       JTextField port, JTextField user, JPasswordField pass) {
         String h = host.getText().trim(), pt = port.getText().trim(), u = user.getText().trim();
         if (h.isEmpty() || pt.isEmpty() || u.isEmpty()) {
             JOptionPane.showMessageDialog(this,
-                "Host, port, and user are required for both databases.",
-                "Missing connection info", JOptionPane.WARNING_MESSAGE);
+                    "Host, port, and user are required for both databases.",
+                    "Missing connection info", JOptionPane.WARNING_MESSAGE);
             return null;
         }
         DbConnectionFactory.DbConfig def = DbConnectionFactory.getDefaultConfig(name);
@@ -421,12 +422,12 @@ public class CompareDbGui extends JFrame {
     private boolean validateInputs(String db1, String db2) {
         if (db1.isEmpty() || db2.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Please enter both database names.",
-                "Missing input", JOptionPane.WARNING_MESSAGE);
+                    "Missing input", JOptionPane.WARNING_MESSAGE);
             return false;
         }
         if (!hasSelectedOption()) {
             JOptionPane.showMessageDialog(this, "Please select at least one comparison option.",
-                "No option selected", JOptionPane.WARNING_MESSAGE);
+                    "No option selected", JOptionPane.WARNING_MESSAGE);
             return false;
         }
         return true;
@@ -434,17 +435,17 @@ public class CompareDbGui extends JFrame {
 
     private boolean hasSelectedOption() {
         return chipTables.isOn() || chipColumns.isOn() || chipData.isOn() || chipTypes.isOn()
-            || chipFunctions.isOn() || chipProcedures.isOn() || chipTriggers.isOn();
+                || chipFunctions.isOn() || chipProcedures.isOn() || chipTriggers.isOn();
     }
 
     private Set<String> getSelectedTablesForComparison(DbConnectionFactory.DbConfig c1,
-            DbConnectionFactory.DbConfig c2) {
+                                                       DbConnectionFactory.DbConfig c2) {
         if (!chipColumns.isOn() && !chipData.isOn() && !chipTypes.isOn()) return Collections.emptySet();
         return promptTableSelection(c1, c2);
     }
 
     private String captureComparisonOutput(DbConnectionFactory.DbConfig c1,
-            DbConnectionFactory.DbConfig c2, Set<String> tables) {
+                                           DbConnectionFactory.DbConfig c2, Set<String> tables) {
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         PrintStream orig = System.out;
         PrintStream cap;
@@ -458,12 +459,12 @@ public class CompareDbGui extends JFrame {
     }
 
     private void runSelectedComparisons(DbConnectionFactory.DbConfig c1,
-            DbConnectionFactory.DbConfig c2, Set<String> tables) {
+                                        DbConnectionFactory.DbConfig c2, Set<String> tables) {
         if (chipTables.isOn())     { System.out.println("\n========== COMPARE TABLES ==========");     CompareTablesDb.compareTables(c1, c2); }
         if (chipColumns.isOn())    { System.out.println("\n========== COMPARE COLUMNS ==========");    CompareDataService.compareColumns(c1, c2, tables); }
         if (chipData.isOn())       { System.out.println("\n========== COMPARE DATA ==========");       CompareDataService.compareData(c1, c2, tables); }
         if (chipTypes.isOn())      { System.out.println("\n========== COMPARE TYPES ==========");      CompareDataService.compareTypes(c1, c2, tables); }
-        if (chipFunctions.isOn())  { System.out.println("\n========== COMPARE FUNCTIONS ==========");  CompareFuncDB.CompareFunc(c1, c2); }
+        if (chipFunctions.isOn())  { System.out.println("\n========== COMPARE FUNCTIONS ==========");  CompareFuncDB.compareFunctions(c1, c2); }
         if (chipProcedures.isOn()) { System.out.println("\n========== COMPARE PROCEDURES =========="); CompareFuncDB.compareProcedures(c1, c2); }
         if (chipTriggers.isOn())   { System.out.println("\n========== COMPARE TRIGGERS ==========");   CompareFuncDB.compareTriggers(c1, c2); }
     }
@@ -472,7 +473,7 @@ public class CompareDbGui extends JFrame {
         List<String> shared = CompareDataService.getSharedTablesBetweenDbs(c1, c2);
         if (shared.isEmpty()) {
             JOptionPane.showMessageDialog(this, "No common tables found between the selected databases.",
-                "No common tables", JOptionPane.WARNING_MESSAGE);
+                    "No common tables", JOptionPane.WARNING_MESSAGE);
             return null;
         }
         JList<String> list = new JList<>(shared.toArray(new String[0]));
@@ -481,55 +482,32 @@ public class CompareDbGui extends JFrame {
         JScrollPane sp = new JScrollPane(list);
         sp.setPreferredSize(new Dimension(320, 220));
         int opt = JOptionPane.showConfirmDialog(this, sp, "Select tables to compare",
-            JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (opt != JOptionPane.OK_OPTION) return null;
         List<String> sel = list.getSelectedValuesList();
         if (sel.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Please select at least one table.",
-                "No table selected", JOptionPane.WARNING_MESSAGE);
+                    "No table selected", JOptionPane.WARNING_MESSAGE);
             return null;
         }
         return new HashSet<>(sel);
     }
 
-    // ── Output rendering ──────────────────────────────────────────────────────
+    // ── Output rendering (plain, no colors) ───────────────────────────────────
 
-    private void renderColoredOutput(String output) {
+    private void displayOutput(String output) {
+        output = removeAnsiCodes(output);
         StyledDocument doc = outputPane.getStyledDocument();
         try {
             doc.remove(0, doc.getLength());
-            String marker = "========== COMPARE ";
-            int first = output.indexOf(marker);
-            if (first < 0) { appendStyled(doc, output, OUT_DEFAULT); return; }
-            if (first > 0) appendStyled(doc, output.substring(0, first), OUT_DEFAULT);
-            int start = first;
-            while (start >= 0) {
-                int next = output.indexOf(marker, start + marker.length());
-                String section = next < 0 ? output.substring(start) : output.substring(start, next);
-                appendStyled(doc, section, sectionColor(section));
-                start = next;
-            }
+            SimpleAttributeSet attr = new SimpleAttributeSet();
+            StyleConstants.setForeground(attr, OUT_DEFAULT);
+            StyleConstants.setFontFamily(attr, "Consolas");
+            StyleConstants.setFontSize(attr, 12);
+            doc.insertString(0, output, attr);
         } catch (BadLocationException ex) {
             outputPane.setText(output);
         }
-    }
-
-    private void appendStyled(StyledDocument doc, String text, Color color) throws BadLocationException {
-        SimpleAttributeSet attr = new SimpleAttributeSet();
-        StyleConstants.setForeground(attr, color);
-        StyleConstants.setFontFamily(attr, "Consolas");
-        StyleConstants.setFontSize(attr, 12);
-        doc.insertString(doc.getLength(), text, attr);
-    }
-
-    private Color sectionColor(String section) {
-        String s = section.toLowerCase();
-        if (s.contains("exists only in") || s.contains(" differs") || s.contains("difference in")
-                || s.contains("missing in") || s.contains("comparison completed with differences")
-                || s.contains("output check failed") || s.contains("could not read")
-                || s.contains("error:") || s.contains("comparison failed")) return OUT_DIFF;
-        if (s.contains("no ") && s.contains("differences found")) return OUT_OK;
-        return OUT_HEAD;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -623,7 +601,6 @@ public class CompareDbGui extends JFrame {
     //  Inner components
     // ═════════════════════════════════════════════════════════════════════════
 
-    /** Pill-shaped toggle chip with checkmark when active */
     static class ChipButton extends JComponent {
         private boolean on = false;
         private final String label;
@@ -634,7 +611,7 @@ public class CompareDbGui extends JFrame {
             setFont(FONT_CHIP);
             setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             FontMetrics fm = getFontMetrics(FONT_CHIP);
-            int w = fm.stringWidth(label) + 36; // extra room for tick
+            int w = fm.stringWidth(label) + 36;
             setPreferredSize(new Dimension(w, 28));
             setMinimumSize(new Dimension(w, 28));
             setMaximumSize(new Dimension(w, 28));
@@ -663,41 +640,33 @@ public class CompareDbGui extends JFrame {
             Color brd = on ? CHIP_ONB  : CHIP_IDLEB;
             Color fg  = on ? CHIP_ONT  : TEXT_SEC;
 
-            // pill background
             g2.setColor(bg);
             g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), getHeight(), getHeight()));
-
-            // pill border
             g2.setColor(brd);
             g2.setStroke(new BasicStroke(1f));
             g2.draw(new RoundRectangle2D.Float(0.5f, 0.5f, getWidth() - 1, getHeight() - 1, getHeight(), getHeight()));
 
-            int cx = 10; // left padding for checkmark area
-
+            int cx = 10;
             if (on) {
-                // draw tick ✓
                 g2.setColor(CHIP_ONT);
                 g2.setStroke(new BasicStroke(1.8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                 int mid = getHeight() / 2;
                 g2.drawLine(cx - 3, mid,     cx,     mid + 4);
                 g2.drawLine(cx,     mid + 4, cx + 5, mid - 3);
-                cx += 9; // shift label right to make room for tick
+                cx += 9;
             } else {
                 cx = 12;
             }
 
-            // label text
             g2.setColor(fg);
             g2.setFont(getFont());
             FontMetrics fm = g2.getFontMetrics();
             int y = (getHeight() + fm.getAscent() - fm.getDescent()) / 2;
             g2.drawString(label, cx, y);
-
             g2.dispose();
         }
     }
 
-    /** Flat rounded button */
     static class FlatButton extends JButton {
         private final Color bg, fg, border;
 
@@ -718,10 +687,10 @@ public class CompareDbGui extends JFrame {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             Color paintBg = isEnabled()
-                ? (getModel().isPressed()
-                    ? bg.darker()
-                    : (getModel().isRollover() ? bg.brighter() : bg))
-                : new Color(200, 200, 200);
+                    ? (getModel().isPressed()
+                       ? bg.darker()
+                       : (getModel().isRollover() ? bg.brighter() : bg))
+                    : new Color(200, 200, 200);
             g2.setColor(paintBg);
             g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), 8, 8));
             g2.setColor(border);
@@ -737,7 +706,6 @@ public class CompareDbGui extends JFrame {
         }
     }
 
-    /** Small colored badge label */
     static class BadgeLabel extends JComponent {
         private final String text;
         private final Color accent;
@@ -763,7 +731,6 @@ public class CompareDbGui extends JFrame {
         }
     }
 
-    /** Animated status dot */
     static class StatusDot extends JComponent {
         private Color color;
         StatusDot(Color color) {
@@ -780,7 +747,6 @@ public class CompareDbGui extends JFrame {
         }
     }
 
-    /** Rounded border for inputs and scroll panes */
     static class RoundedBorder extends AbstractBorder {
         private final int radius;
         private final Color color;
@@ -799,7 +765,6 @@ public class CompareDbGui extends JFrame {
         }
     }
 
-    /** Two stacked database cylinders with a VS badge — painted logo icon */
     static class DbLogoIcon extends JComponent {
         DbLogoIcon() {
             setPreferredSize(new Dimension(56, 56));
@@ -807,10 +772,9 @@ public class CompareDbGui extends JFrame {
             setMaximumSize(new Dimension(56, 56));
         }
 
-        /** Render the logo into a BufferedImage of the given size for use as window icon */
         static java.awt.image.BufferedImage createImage(int size) {
             java.awt.image.BufferedImage img =
-                new java.awt.image.BufferedImage(size, size, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                    new java.awt.image.BufferedImage(size, size, java.awt.image.BufferedImage.TYPE_INT_ARGB);
             Graphics2D g2 = img.createGraphics();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,      RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
@@ -831,20 +795,16 @@ public class CompareDbGui extends JFrame {
         }
 
         private static void paintLogo(Graphics2D g2, int W, int H) {
-            // ── background pill ───────────────────────────────────────────────
             g2.setColor(new Color(235, 242, 255));
             g2.fill(new RoundRectangle2D.Float(0, 0, W, H, 14, 14));
 
-            // scale factor so drawing works at any size (base = 56px)
             float sx = W / 56f, sy = H / 56f;
 
-            // Left cylinder (DB1, blue)  Right cylinder (DB2, green)
             drawCylinder(g2, sx, sy,  5,  8, 20, 36, 6,
                     new Color(56, 138, 221), new Color(96, 165, 250), new Color(30, 100, 180));
             drawCylinder(g2, sx, sy, 30,  8, 20, 36, 6,
                     new Color(31, 158, 117), new Color(52, 211, 153), new Color(15, 110, 80));
 
-            // ── VS badge in the centre overlap ────────────────────────────────
             int bx = (int)(W / 2f - 8 * sx), by = (int)(H / 2f - 8 * sy);
             int bw = (int)(16 * sx),         bh = (int)(16 * sy);
             g2.setColor(Color.WHITE);
@@ -857,12 +817,12 @@ public class CompareDbGui extends JFrame {
             FontMetrics fm = g2.getFontMetrics();
             String vs = "VS";
             g2.drawString(vs, bx + (bw - fm.stringWidth(vs)) / 2,
-                              by + (bh + fm.getAscent() - fm.getDescent()) / 2);
+                    by + (bh + fm.getAscent() - fm.getDescent()) / 2);
         }
 
         private static void drawCylinder(Graphics2D g2, float sx, float sy,
-                                          int x, int y, int w, int h, int eh,
-                                          Color body, Color topColor, Color botColor) {
+                                         int x, int y, int w, int h, int eh,
+                                         Color body, Color topColor, Color botColor) {
             int rx = (int)(x * sx), ry = (int)(y * sy);
             int rw = (int)(w * sx), rh = (int)(h * sy), re = (int)(eh * sy);
             int halfE = re / 2;
