@@ -243,6 +243,32 @@ public class ExportExcel {
             System.err.println("❌ Failed to export column differences: " + e.getMessage());
         }
     }
+    public static void exportTableComparison(
+            List<String> d1Tables,
+            List<String> d2Tables,
+            String db1Name,
+            String db2Name) {
+
+        java.io.File dir = new java.io.File("output");
+        if (!dir.exists()) dir.mkdirs();
+
+        String outputPath = "output/table_differences.xlsx";
+
+        // Build the sorted union of both table lists
+        Set<String> allTables = new TreeSet<>();
+        allTables.addAll(d1Tables);
+        allTables.addAll(d2Tables);
+
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            writeTableDiffSheet(wb, allTables, d1Tables, d2Tables, db1Name, db2Name);
+            try (FileOutputStream fos = new FileOutputStream(outputPath)) {
+                wb.write(fos);
+            }
+            System.out.println("✅ Table differences exported to: " + outputPath);
+        } catch (IOException e) {
+            System.err.println("❌ Failed to export table differences: " + e.getMessage());
+        }
+    }
 
     // ─── 2. Column Differences Sheet ────────────────────────────────────────
     private static void writeColumnSheet(XSSFWorkbook wb, Map<String, List<String>> result,

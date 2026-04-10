@@ -315,12 +315,11 @@ ExportExcel.exportTypeComparison(result, db1Name, db2Name);
         List<String> d1Tables = ShowTablesService.GetNameTable(db1Config);
         List<String> d2Tables = ShowTablesService.GetNameTable(db2Config);
 
-        // 🔥 نجمعو جميع tables
         Set<String> allTables = new TreeSet<>();
         allTables.addAll(d1Tables);
         allTables.addAll(d2Tables);
 
-        // 🔥 نحسبو max length
+
         int maxTableLength = "Table".length();
         for (String table : allTables) {
             if (table.length() > maxTableLength) {
@@ -360,6 +359,8 @@ ExportExcel.exportTypeComparison(result, db1Name, db2Name);
             System.out.printf(format, table, status);
             System.out.println(line);
         }
+        ExportExcel.exportTableComparison(d1Tables,d2Tables,db1,db2);
     }
+
 
 }
