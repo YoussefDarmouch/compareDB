@@ -1,50 +1,63 @@
 package ApiServer;
 
-import  services.DbConnectionFactory;
-import  Package.CompareTablesDb;
-import  Package.CompareDataService;
-import  Package.CompareFuncDB;
-import java.util.Map;
-import java.util.HashMap;
+import services.DbConnectionFactory;
+import Package.CompareTablesDb;
+import Package.CompareDataService;
+import Package.CompareFuncDB;
+
+import java.util.Set;
 
 public class CompareService {
 
-    public Map<String, Object> runSelectedComparisons(
+    public Object compareTables(
+            DbConnectionFactory.DbConfig db1Config,
+            DbConnectionFactory.DbConfig db2Config) {
+
+        return CompareTablesDb.compareTablesApi(db1Config, db2Config);
+    }
+
+    public Object compareColumns(
             DbConnectionFactory.DbConfig db1Config,
             DbConnectionFactory.DbConfig db2Config,
+            Set<String> tables) {
 
-            CompareRequest request) {
+        return CompareDataService.compareColumnsApi(db1Config, db2Config, tables);
+    }
 
-        Map<String, Object> result = new HashMap<>();
+    public Object compareData(
+            DbConnectionFactory.DbConfig db1Config,
+            DbConnectionFactory.DbConfig db2Config,
+            Set<String> tables) {
 
-        if (request.isTables()) {
-            result.put("tables", CompareTablesDb.compareTablesApi(db1Config, db2Config));
-        }
+        return CompareDataService.compareDataApi(db1Config, db2Config, tables);
+    }
 
-        if (request.isColumns()) {
-            result.put("columns", CompareDataService.compareColumnsApi(db1Config, db2Config,request.getTablesToCompare() ));
-        }
+    public Object compareTypes(
+            DbConnectionFactory.DbConfig db1Config,
+            DbConnectionFactory.DbConfig db2Config,
+            Set<String> tables) {
 
-        if (request.isData()) {
-            result.put("data", CompareDataService.compareDataApi(db1Config, db2Config, request.getTablesToCompare()));
-        }
+        return CompareDataService.compareTypesApi(db1Config, db2Config, tables);
+    }
 
-        if (request.isTypes()) {
-            result.put("types", CompareDataService.compareTypesApi(db1Config, db2Config, request.getTablesToCompare()));
-        }
+    public Object compareFunctions(
+            DbConnectionFactory.DbConfig db1Config,
+            DbConnectionFactory.DbConfig db2Config) {
 
-        if (request.isFunctions()) {
-            result.put("functions", CompareFuncDB.compareFunctionsApi(db1Config, db2Config));
-        }
+        return CompareFuncDB.compareFunctionsApi(db1Config, db2Config);
+    }
 
-        if (request.isProcedures()) {
-            result.put("procedures", CompareFuncDB.compareProceduresApi(db1Config, db2Config));
-        }
+    public Object compareProcedures(
+            DbConnectionFactory.DbConfig db1Config,
+            DbConnectionFactory.DbConfig db2Config) {
 
-        if (request.isTriggers()) {
-            result.put("triggers", CompareFuncDB.compareTriggersApi(db1Config, db2Config));
-        }
+        return CompareFuncDB.compareProceduresApi(db1Config, db2Config);
+    }
 
-        return result;
+    public Object compareTriggers(
+            DbConnectionFactory.DbConfig db1Config,
+            DbConnectionFactory.DbConfig db2Config) {
+
+        return CompareFuncDB.compareTriggersApi(db1Config, db2Config);
     }
 }

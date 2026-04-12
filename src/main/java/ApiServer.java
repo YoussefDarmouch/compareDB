@@ -1,8 +1,11 @@
 import static spark.Spark.*;
+
 import ApiServer.CompareService;
 import ApiServer.CompareRequest;
 import com.google.gson.Gson;
 import services.DbConnectionFactory;
+
+import java.util.Set;
 
 public class ApiServer {
 
@@ -12,9 +15,8 @@ public class ApiServer {
 
         Gson gson = new Gson();
 
-
         before((req, res) -> {
-            res.header("Access-Control-Allow-Origin", " http://localhost:4200");
+            res.header("Access-Control-Allow-Origin", "http://localhost:4200");
             res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
             res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
@@ -24,51 +26,142 @@ public class ApiServer {
             }
         });
 
-        // test
+        // health check
         get("/api/health", (req, res) -> {
             res.type("application/json");
             return "{\"status\":\"OK\"}";
         });
 
-        
-        spark.Route handler = (req, res) -> {
+        final CompareService service = new CompareService();
+
+        // helper DB builder (JAVA 8 safe)
+        java.util.function.Function<CompareRequest.DbConfig, DbConnectionFactory.DbConfig> buildDb =
+                new java.util.function.Function<CompareRequest.DbConfig, DbConnectionFactory.DbConfig>() {
+                    @Override
+                    public DbConnectionFactory.DbConfig apply(CompareRequest.DbConfig db) {
+                        return new DbConnectionFactory.DbConfig(
+                                db.getDatabaseName(),
+                                db.getHost(),
+                                String.valueOf(db.getPort()),
+                                db.getUser(),
+                                db.getPassword(),
+                                "useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+                        );
+                    }
+                };
+
+        // ======================
+        // TABLES
+        // ======================
+        post("/api/compare/tables", (req, res) -> {
 
             CompareRequest request = gson.fromJson(req.body(), CompareRequest.class);
 
-            DbConnectionFactory.DbConfig db1 = new DbConnectionFactory.DbConfig(
-                    request.getDb1().getDatabaseName(),
-                    request.getDb1().getHost(),
-                    String.valueOf(request.getDb1().getPort()),
-                    request.getDb1().getUser(),
-                    request.getDb1().getPassword(),
-                    "useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
-            );
+            DbConnectionFactory.DbConfig db1 = buildDb.apply(request.getDb1());
+            DbConnectionFactory.DbConfig db2 = buildDb.apply(request.getDb2());
 
-            DbConnectionFactory.DbConfig db2 = new DbConnectionFactory.DbConfig(
-                    request.getDb2().getDatabaseName(),
-                    request.getDb2().getHost(),
-                    String.valueOf(request.getDb2().getPort()),
-                    request.getDb2().getUser(),
-                    request.getDb2().getPassword(),
-                    "useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
-            );
-
-            CompareService service = new CompareService();
-
-            Object result = service.runSelectedComparisons(db1, db2, request);
+            Object result = service.compareTables(db1, db2);
 
             res.type("application/json");
             return gson.toJson(result);
-        };
+        });
 
-        // ✅ ROUTES
-        post("/api/compare", handler);
-        post("/api/compare/columns", handler);
-        post("/api/compare/tables", handler);
-        post("/api/compare/data", handler);
-        post("/api/compare/types", handler);
-        post("/api/compare/functions", handler);
-        post("/api/compare/procedures", handler);
-        post("/api/compare/triggers", handler);
+        // ======================
+        // COLUMNS
+        // ======================
+        post("/api/compare/columns", (req, res) -> {
+
+            CompareRequest request = gson.fromJson(req.body(), CompareRequest.class);
+
+            DbConnectionFactory.DbConfig db1 = buildDb.apply(request.getDb1());
+            DbConnectionFactory.DbConfig db2 = buildDb.apply(request.getDb2());
+
+            Set<String> tables = request.getTablesToCompare();
+
+            Object result = service.compareColumns(db1, db2, tables);
+
+            res.type("application/json");
+            return gson.toJson(result);
+        });
+
+        // ======================
+        // DATA
+        // ======================
+        post("/api/compare/data", (req, res) -> {
+
+            CompareRequest request = gson.fromJson(req.body(), CompareRequest.class);
+
+            DbConnectionFactory.DbConfig db1 = buildDb.apply(request.getDb1());
+            DbConnectionFactory.DbConfig db2 = buildDb.apply(request.getDb2());
+
+            Object result = service.compareData(db1, db2, request.getTablesToCompare());
+
+            res.type("application/json");
+            return gson.toJson(result);
+        });
+
+        // ======================
+        // TYPES
+        // ======================
+        post("/api/compare/types", (req, res) -> {
+
+            CompareRequest request = gson.fromJson(req.body(), CompareRequest.class);
+
+            DbConnectionFactory.DbConfig db1 = buildDb.apply(request.getDb1());
+            DbConnectionFactory.DbConfig db2 = buildDb.apply(request.getDb2());
+
+            Object result = service.compareTypes(db1, db2, request.getTablesToCompare());
+
+            res.type("application/json");
+            return gson.toJson(result);
+        });
+
+        // ======================
+        // FUNCTIONS
+        // ======================
+        post("/api/compare/functions", (req, res) -> {
+
+            CompareRequest request = gson.fromJson(req.body(), CompareRequest.class);
+
+            DbConnectionFactory.DbConfig db1 = buildDb.apply(request.getDb1());
+            DbConnectionFactory.DbConfig db2 = buildDb.apply(request.getDb2());
+
+            Object result = service.compareFunctions(db1, db2);
+
+            res.type("application/json");
+            return gson.toJson(result);
+        });
+
+        // ======================
+        // PROCEDURES
+        // ======================
+        post("/api/compare/procedures", (req, res) -> {
+
+            CompareRequest request = gson.fromJson(req.body(), CompareRequest.class);
+
+            DbConnectionFactory.DbConfig db1 = buildDb.apply(request.getDb1());
+            DbConnectionFactory.DbConfig db2 = buildDb.apply(request.getDb2());
+
+            Object result = service.compareProcedures(db1, db2);
+
+            res.type("application/json");
+            return gson.toJson(result);
+        });
+
+        // ======================
+        // TRIGGERS
+        // ======================
+        post("/api/compare/triggers", (req, res) -> {
+
+            CompareRequest request = gson.fromJson(req.body(), CompareRequest.class);
+
+            DbConnectionFactory.DbConfig db1 = buildDb.apply(request.getDb1());
+            DbConnectionFactory.DbConfig db2 = buildDb.apply(request.getDb2());
+
+            Object result = service.compareTriggers(db1, db2);
+
+            res.type("application/json");
+            return gson.toJson(result);
+        });
     }
 }
