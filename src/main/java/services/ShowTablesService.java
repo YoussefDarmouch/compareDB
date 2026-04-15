@@ -3,38 +3,54 @@ package services;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
 
 public class ShowTablesService {
-    static public List<String> GetNameTable(String databaseName) {
+
+    // entry by databaseName
+    public static List<String> GetNameTable(String databaseName) {
         return GetNameTable(DbConnectionFactory.getDefaultConfig(databaseName));
     }
 
-    static public List<String> GetNameTable(DbConnectionFactory.DbConfig dbConfig) {
-        List<String> listTable = new ArrayList<>();
-        String databaseName = dbConfig.getDatabaseName();
+    // main safe method
+    public static List<String> GetNameTable(DbConnectionFactory.DbConfig dbConfig) {
 
-        try (Connection connection = DbConnectionFactory.getConnection(dbConfig);
-             Statement statementTable = connection.createStatement();
-             ResultSet TableName = statementTable.executeQuery("SHOW TABLES FROM " + databaseName)) {
-            while (TableName.next()) {
-                String tableName = TableName.getString(1);
-                listTable.add(tableName);
+        List<String> listTable = new ArrayList<>();
+
+        try (Connection connection = DbConnectionFactory.getConnection(dbConfig)) {
+
+            String query;
+
+            // MYSQL
+            if (DbConnectionFactory.DbEngine.MYSQL.equals(dbConfig.getEngine())) {
+                query = "SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'";
+            }
+
+            // ORACLE
+            else {
+                query = "SELECT table_name FROM all_tables WHERE owner = USER";
+            }
+
+            try (Statement stmt = connection.createStatement();
+                 ResultSet rs = stmt.executeQuery(query)) {
+
+                while (rs.next()) {
+                    listTable.add(rs.getString(1));
+                }
             }
 
         } catch (SQLException e) {
             e.printStackTrace();
-
         }
+
         return listTable;
     }
 
+    // print helper
     public void ShowNameTables(String databaseName) {
         List<String> listTable = GetNameTable(databaseName);
+
         for (String tableName : listTable) {
-            System.out.println("   📌 Table: " + tableName);
+            System.out.println("📌 Table: " + tableName);
         }
     }
-
 }

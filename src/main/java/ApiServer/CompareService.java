@@ -60,4 +60,11 @@ public class CompareService {
 
         return CompareFuncDB.compareTriggersApi(db1Config, db2Config);
     }
+
+    public Object comparePackages(
+            DbConnectionFactory.DbConfig db1Config,
+            DbConnectionFactory.DbConfig db2Config) {
+
+        return CompareFuncDB.comparePackagesApi(db1Config, db2Config);
+    }
 }

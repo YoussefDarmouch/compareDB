@@ -16,6 +16,8 @@ import org.apache.poi.xssf.usermodel.XSSFFont;
 import org.apache.poi.xssf.usermodel.IndexedColorMap;
 
 import services.DbConnectionFactory;
+import services.ComparisonOutputUtils;
+import services.DbLabelUtils;
 import services.ShowTablesService;
 
 public class ExportExcel {
@@ -148,30 +150,47 @@ public class ExportExcel {
         Sheet sheet = wb.createSheet("Type Differences");
         int rowIdx = 0;
 
-        rowIdx = addSectionTitle(sheet, wb, rowIdx, "Type Differences", 4);
-        rowIdx = addHeaderRow(sheet, wb, rowIdx, new String[]{"Table", "Column", db1Name, db2Name});
+        rowIdx = addSectionTitle(sheet, wb, rowIdx, "Type Differences", 6);
+        rowIdx = addHeaderRow(sheet, wb, rowIdx, ComparisonOutputUtils.comparisonHeaders("COLUMN_NAME", db1Name, db2Name));
 
         CellStyle redStyle   = coloredStyle(wb, RED_HEX);
+        CellStyle yellowStyle = coloredStyle(wb, YELLOW_HEX);
+        CellStyle greenStyle = coloredStyle(wb, GREEN_HEX);
         CellStyle normalSt   = normalStyle(wb);
         CellStyle altSt      = altRowStyle(wb);
 
         int dataRowCount = 0;
         for (Map.Entry<String, List<String>> entry : result.entrySet()) {
             String table = entry.getKey();
+            if ("info".equalsIgnoreCase(table)) {
+                for (String info : entry.getValue()) {
+                    Row row = sheet.createRow(rowIdx++);
+                    setCell(row, 0, "-", normalSt);
+                    setCell(row, 1, "INFO", yellowStyle);
+                    setCell(row, 2, "-", normalSt);
+                    setCell(row, 3, "-", normalSt);
+                    setCell(row, 4, "LOW", greenStyle);
+                    setCell(row, 5, info, normalSt);
+                }
+                continue;
+            }
             for (String line : entry.getValue()) {
                 String[] parts = parseTypeLine(line);
                 if (parts != null) {
+                    String[] displayRow = ComparisonOutputUtils.typeRow(table, parts[0], parts[1], parts[2]);
                     Row row = sheet.createRow(rowIdx++);
                     CellStyle bg = (dataRowCount % 2 == 0) ? normalSt : altSt;
-                    setCell(row, 0, table, bg);
-                    setCell(row, 1, parts[0], bg);
-                    setCell(row, 2, parts[1], redStyle);
-                    setCell(row, 3, parts[2], redStyle);
+                    setCell(row, 0, displayRow[0], bg);
+                    setCell(row, 1, displayRow[1], redStyle);
+                    setCell(row, 2, displayRow[2], bg);
+                    setCell(row, 3, displayRow[3], bg);
+                    setCell(row, 4, displayRow[4], yellowStyle);
+                    setCell(row, 5, displayRow[5], bg);
                     dataRowCount++;
                 }
             }
         }
-        autoSize(sheet, 4);
+        autoSize(sheet, 6);
     }
 
     // ─── Standalone: export type comparison directly to output/ folder ──────
@@ -276,31 +295,48 @@ public class ExportExcel {
         Sheet sheet = wb.createSheet("Column Differences");
         int rowIdx = 0;
 
-        rowIdx = addSectionTitle(sheet, wb, rowIdx, "Column Differences", 3);
-        rowIdx = addHeaderRow(sheet, wb, rowIdx, new String[]{"Table", "Column", "Exists in"});
+        rowIdx = addSectionTitle(sheet, wb, rowIdx, "Column Differences", 6);
+        rowIdx = addHeaderRow(sheet, wb, rowIdx, ComparisonOutputUtils.comparisonHeaders("COLUMN_NAME", db1Name, db2Name));
 
         CellStyle yellowStyle = coloredStyle(wb, YELLOW_HEX);
         CellStyle cyanStyle   = coloredStyle(wb, CYAN_HEX);
+        CellStyle redStyle    = coloredStyle(wb, RED_HEX);
+        CellStyle greenStyle  = coloredStyle(wb, GREEN_HEX);
         CellStyle normalSt    = normalStyle(wb);
         CellStyle altSt       = altRowStyle(wb);
 
         int dataRowCount = 0;
         for (Map.Entry<String, List<String>> entry : result.entrySet()) {
             String table = entry.getKey();
+            if ("info".equalsIgnoreCase(table)) {
+                for (String info : entry.getValue()) {
+                    Row row = sheet.createRow(rowIdx++);
+                    setCell(row, 0, "-", normalSt);
+                    setCell(row, 1, "INFO", yellowStyle);
+                    setCell(row, 2, "-", normalSt);
+                    setCell(row, 3, "-", normalSt);
+                    setCell(row, 4, "LOW", greenStyle);
+                    setCell(row, 5, info, normalSt);
+                }
+                continue;
+            }
             for (String line : entry.getValue()) {
                 String[] parts = parseColumnLine(line, db1Name, db2Name);
                 if (parts != null) {
+                    String[] displayRow = ComparisonOutputUtils.columnRow(table, parts[0], parts[1], db1Name, db2Name);
                     Row row = sheet.createRow(rowIdx++);
                     CellStyle bg = (dataRowCount % 2 == 0) ? normalSt : altSt;
-                    CellStyle existsStyle = parts[1].contains(db1Name) ? yellowStyle : cyanStyle;
-                    setCell(row, 0, table, bg);
-                    setCell(row, 1, parts[0], bg);
-                    setCell(row, 2, parts[1], existsStyle);
+                    setCell(row, 0, displayRow[0], bg);
+                    setCell(row, 1, displayRow[1], redStyle);
+                    setCell(row, 2, displayRow[2], "PRESENT".equals(displayRow[2]) ? yellowStyle : bg);
+                    setCell(row, 3, displayRow[3], "PRESENT".equals(displayRow[3]) ? cyanStyle : bg);
+                    setCell(row, 4, displayRow[4], redStyle);
+                    setCell(row, 5, displayRow[5], bg);
                     dataRowCount++;
                 }
             }
         }
-        autoSize(sheet, 3);
+        autoSize(sheet, 6);
     }
 
     // ─── 3. Data Differences Sheet ──────────────────────────────────────────
@@ -309,31 +345,46 @@ public class ExportExcel {
         Sheet sheet = wb.createSheet("Data Differences");
         int rowIdx = 0;
 
-        rowIdx = addSectionTitle(sheet, wb, rowIdx, "Data Differences", 5);
-        rowIdx = addHeaderRow(sheet, wb, rowIdx, new String[]{"Table", "Row", "Column", db1Name, db2Name});
+        rowIdx = addSectionTitle(sheet, wb, rowIdx, "Data Differences", 6);
+        rowIdx = addHeaderRow(sheet, wb, rowIdx, ComparisonOutputUtils.comparisonHeaders("OBJECT_NAME", db1Name, db2Name));
 
         CellStyle redStyle = coloredStyle(wb, RED_HEX);
+        CellStyle yellowStyle = coloredStyle(wb, YELLOW_HEX);
         CellStyle normalSt = normalStyle(wb);
         CellStyle altSt    = altRowStyle(wb);
 
         int dataRowCount = 0;
         for (Map.Entry<String, List<String>> entry : result.entrySet()) {
             String table = entry.getKey();
+            if ("info".equalsIgnoreCase(table)) {
+                for (String info : entry.getValue()) {
+                    Row row = sheet.createRow(rowIdx++);
+                    setCell(row, 0, "-", normalSt);
+                    setCell(row, 1, "INFO", yellowStyle);
+                    setCell(row, 2, "-", normalSt);
+                    setCell(row, 3, "-", normalSt);
+                    setCell(row, 4, "LOW", yellowStyle);
+                    setCell(row, 5, info, normalSt);
+                }
+                continue;
+            }
             for (String line : entry.getValue()) {
                 String[] parts = parseDataLine(line);
                 if (parts != null) {
+                    String[] displayRow = ComparisonOutputUtils.dataRow(table, parts[0], parts[1], parts[2], parts[3]);
                     Row row = sheet.createRow(rowIdx++);
                     CellStyle bg = (dataRowCount % 2 == 0) ? normalSt : altSt;
-                    setCell(row, 0, table, bg);
-                    setCell(row, 1, parts[0], bg);
-                    setCell(row, 2, parts[1], bg);
-                    setCell(row, 3, parts[2], redStyle);
-                    setCell(row, 4, parts[3], redStyle);
+                    setCell(row, 0, displayRow[0], bg);
+                    setCell(row, 1, displayRow[1], redStyle);
+                    setCell(row, 2, displayRow[2], bg);
+                    setCell(row, 3, displayRow[3], bg);
+                    setCell(row, 4, displayRow[4], yellowStyle);
+                    setCell(row, 5, displayRow[5], bg);
                     dataRowCount++;
                 }
             }
         }
-        autoSize(sheet, 5);
+        autoSize(sheet, 6);
     }
 
     // ─── 4. Table Differences Sheet ─────────────────────────────────────────
@@ -347,12 +398,13 @@ public class ExportExcel {
         Sheet sheet = wb.createSheet("Table Differences");
         int rowIdx = 0;
 
-        rowIdx = addSectionTitle(sheet, wb, rowIdx, "Table Differences: " + db1Name + " vs " + db2Name, 3);
-        rowIdx = addHeaderRow(sheet, wb, rowIdx, new String[]{"#", "Table", "Status"});
+        rowIdx = addSectionTitle(sheet, wb, rowIdx, "Table Differences: " + db1Name + " vs " + db2Name, 6);
+        rowIdx = addHeaderRow(sheet, wb, rowIdx, ComparisonOutputUtils.comparisonHeaders("TABLE_NAME", db1Name, db2Name));
 
         CellStyle greenStyle  = coloredStyle(wb, GREEN_HEX);
         CellStyle yellowStyle = coloredStyle(wb, YELLOW_HEX);
         CellStyle cyanStyle   = coloredStyle(wb, CYAN_HEX);
+        CellStyle redStyle    = coloredStyle(wb, RED_HEX);
         CellStyle normalSt    = normalStyle(wb);
         CellStyle altSt       = altRowStyle(wb);
 
@@ -361,28 +413,20 @@ public class ExportExcel {
             boolean inDb1 = d1Tables.contains(table);
             boolean inDb2 = d2Tables.contains(table);
 
-            String status;
-            CellStyle statusStyle;
-
-            if (inDb1 && inDb2) {
-                status = db1Name + " & " + db2Name;
-                statusStyle = greenStyle;
-            } else if (inDb1) {
-                status = db1Name + " only";
-                statusStyle = yellowStyle;
-            } else {
-                status = db2Name + " only";
-                statusStyle = cyanStyle;
-            }
+            String[] displayRow = ComparisonOutputUtils.tableRow(table, inDb1, inDb2, db1Name, db2Name);
+            CellStyle statusStyle = "HIGH".equals(displayRow[4]) ? redStyle : greenStyle;
 
             Row row = sheet.createRow(rowIdx++);
             CellStyle bg = (i % 2 == 0) ? normalSt : altSt;
-            setCell(row, 0, String.valueOf(i + 1), bg);
-            setCell(row, 1, table, bg);
-            setCell(row, 2, status, statusStyle);
+            setCell(row, 0, displayRow[0], bg);
+            setCell(row, 1, displayRow[1], statusStyle);
+            setCell(row, 2, displayRow[2], inDb1 ? greenStyle : redStyle);
+            setCell(row, 3, displayRow[3], inDb2 ? greenStyle : redStyle);
+            setCell(row, 4, displayRow[4], "HIGH".equals(displayRow[4]) ? yellowStyle : greenStyle);
+            setCell(row, 5, displayRow[5], bg);
             i++;
         }
-        autoSize(sheet, 3);
+        autoSize(sheet, 6);
     }
 
     // Keep old writeSharedTablesSheet for exportAll backward compat
@@ -392,83 +436,284 @@ public class ExportExcel {
     }
 
     // ─── 5. Functions Sheet ──────────────────────────────────────────────────
-    private static void writeFunctionSheet(XSSFWorkbook wb, Map<String, List<String>> result) {
+    private static void writeFunctionSheet(XSSFWorkbook wb, Map<String, List<String>> result, String db1Name, String db2Name) {
         Sheet sheet = wb.createSheet("Function Differences");
         int rowIdx = 0;
 
-        rowIdx = addSectionTitle(sheet, wb, rowIdx, "Function Differences", 2);
-        rowIdx = addHeaderRow(sheet, wb, rowIdx, new String[]{"Category", "Detail"});
+        rowIdx = addSectionTitle(sheet, wb, rowIdx, "Function Differences", 6);
+        rowIdx = addHeaderRow(sheet, wb, rowIdx, ComparisonOutputUtils.comparisonHeaders("FUNCTION_NAME", db1Name, db2Name));
 
         CellStyle normalSt = normalStyle(wb);
-        CellStyle altSt    = altRowStyle(wb);
+        CellStyle greenSt  = coloredStyle(wb, GREEN_HEX);
+        CellStyle redSt    = coloredStyle(wb, RED_HEX);
+        CellStyle yellowSt = coloredStyle(wb, YELLOW_HEX);
 
-        int dataRowCount = 0;
         for (Map.Entry<String, List<String>> entry : result.entrySet()) {
+            if ("info".equalsIgnoreCase(entry.getKey())) {
+                for (String info : entry.getValue()) {
+                    Row row = sheet.createRow(rowIdx++);
+                    String[] infoRow = ComparisonOutputUtils.objectInfoRow(info);
+                    for (int i = 0; i < infoRow.length; i++) {
+                        setCell(row, i, infoRow[i], i == 1 ? yellowSt : normalSt);
+                    }
+                }
+                continue;
+            }
+
             for (String line : entry.getValue()) {
+
+                String[] parts = parseObjectLine(line);
+                if (parts == null) continue;
+
                 Row row = sheet.createRow(rowIdx++);
-                CellStyle bg = (dataRowCount % 2 == 0) ? normalSt : altSt;
-                setCell(row, 0, entry.getKey(), bg);
-                setCell(row, 1, line.trim(), bg);
-                dataRowCount++;
+
+                CellStyle statusStyle = parts[1].equals("SAME")
+                        ? greenSt
+                        : (parts[1].startsWith("ONLY") ? yellowSt : redSt);
+
+                setCell(row, 0, parts[0], normalSt);
+                setCell(row, 1, parts[1], statusStyle);
+                setCell(row, 2, parts[2], normalSt);
+                setCell(row, 3, parts[3], normalSt);
+                setCell(row, 4, parts[4], "HIGH".equals(parts[4]) ? redSt : yellowSt);
+                setCell(row, 5, parts[5], normalSt);
             }
         }
-        autoSize(sheet, 2);
+
+        autoSize(sheet, 6);
     }
 
+    public static void exportFunctionComparison(Map<String, List<String>> result) {
+
+        File dir = new File("output");
+        if (!dir.exists()) dir.mkdirs();
+
+        String outputPath = "output/function_differences.xlsx";
+
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+
+            writeFunctionSheet(wb, result, "DB1", "DB2");
+
+            try (FileOutputStream fos = new FileOutputStream(outputPath)) {
+                wb.write(fos);
+            }
+
+            System.out.println("✅ Function differences exported to: " + outputPath);
+
+        } catch (IOException e) {
+            System.err.println("❌ Failed to export: " + e.getMessage());
+        }
+    }
     // ─── 6. Procedures Sheet ─────────────────────────────────────────────────
-    private static void writeProcedureSheet(XSSFWorkbook wb, Map<String, List<String>> result) {
+    private static void writeProcedureSheet(XSSFWorkbook wb, Map<String, List<String>> result, String db1Name, String db2Name) {
         Sheet sheet = wb.createSheet("Procedure Differences");
         int rowIdx = 0;
 
-        rowIdx = addSectionTitle(sheet, wb, rowIdx, "Procedure Differences", 2);
-        rowIdx = addHeaderRow(sheet, wb, rowIdx, new String[]{"Category", "Detail"});
+        rowIdx = addSectionTitle(sheet, wb, rowIdx, "Procedure Differences", 6);
+        rowIdx = addHeaderRow(sheet, wb, rowIdx, ComparisonOutputUtils.comparisonHeaders("PROCEDURE_NAME", db1Name, db2Name));
 
         CellStyle normalSt = normalStyle(wb);
-        CellStyle altSt    = altRowStyle(wb);
+        CellStyle greenSt  = coloredStyle(wb, GREEN_HEX);
+        CellStyle redSt    = coloredStyle(wb, RED_HEX);
+        CellStyle yellowSt = coloredStyle(wb, YELLOW_HEX);
 
-        int dataRowCount = 0;
         for (Map.Entry<String, List<String>> entry : result.entrySet()) {
+            if ("info".equalsIgnoreCase(entry.getKey())) {
+                for (String info : entry.getValue()) {
+                    Row row = sheet.createRow(rowIdx++);
+                    String[] infoRow = ComparisonOutputUtils.objectInfoRow(info);
+                    for (int i = 0; i < infoRow.length; i++) {
+                        setCell(row, i, infoRow[i], i == 1 ? yellowSt : normalSt);
+                    }
+                }
+                continue;
+            }
+
             for (String line : entry.getValue()) {
+
+                String[] parts = parseObjectLine(line);
+                if (parts == null) continue;
+
                 Row row = sheet.createRow(rowIdx++);
-                CellStyle bg = (dataRowCount % 2 == 0) ? normalSt : altSt;
-                setCell(row, 0, entry.getKey(), bg);
-                setCell(row, 1, line.trim(), bg);
-                dataRowCount++;
+
+                CellStyle statusStyle = parts[1].equals("SAME")
+                        ? greenSt
+                        : (parts[1].startsWith("ONLY") ? yellowSt : redSt);
+
+                setCell(row, 0, parts[0], normalSt);
+                setCell(row, 1, parts[1], statusStyle);
+                setCell(row, 2, parts[2], normalSt);
+                setCell(row, 3, parts[3], normalSt);
+                setCell(row, 4, parts[4], "HIGH".equals(parts[4]) ? redSt : yellowSt);
+                setCell(row, 5, parts[5], normalSt);
             }
         }
-        autoSize(sheet, 2);
-    }
 
+        autoSize(sheet, 6);
+    }
+    public static void exportProcedureComparison(Map<String, List<String>> procedureResult) {
+
+        File dir = new File("output");
+        if (!dir.exists()) dir.mkdirs();
+
+        String outputPath = "output/procedure_differences.xlsx";
+
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+
+            writeProcedureSheet(wb, procedureResult, "DB1", "DB2");
+
+            try (FileOutputStream fos = new FileOutputStream(outputPath)) {
+                wb.write(fos);
+            }
+
+            System.out.println("✅ Procedure Excel created: " + outputPath);
+
+        } catch (IOException e) {
+            System.err.println("❌ Error: " + e.getMessage());
+        }
+    }
     // ─── 7. Triggers Sheet ───────────────────────────────────────────────────
-    private static void writeTriggerSheet(XSSFWorkbook wb, Map<String, List<String>> result) {
+    private static void writeTriggerSheet(XSSFWorkbook wb, Map<String, List<String>> result, String db1Name, String db2Name) {
         Sheet sheet = wb.createSheet("Trigger Differences");
         int rowIdx = 0;
 
-        rowIdx = addSectionTitle(sheet, wb, rowIdx, "Trigger Differences", 2);
-        rowIdx = addHeaderRow(sheet, wb, rowIdx, new String[]{"Category", "Detail"});
+        rowIdx = addSectionTitle(sheet, wb, rowIdx, "Trigger Differences", 6);
+        rowIdx = addHeaderRow(sheet, wb, rowIdx, ComparisonOutputUtils.comparisonHeaders("TRIGGER_NAME", db1Name, db2Name));
 
         CellStyle normalSt = normalStyle(wb);
-        CellStyle altSt    = altRowStyle(wb);
+        CellStyle greenSt  = coloredStyle(wb, GREEN_HEX);
+        CellStyle redSt    = coloredStyle(wb, RED_HEX);
+        CellStyle yellowSt = coloredStyle(wb, YELLOW_HEX);
 
-        int dataRowCount = 0;
         for (Map.Entry<String, List<String>> entry : result.entrySet()) {
+            if ("info".equalsIgnoreCase(entry.getKey())) {
+                for (String info : entry.getValue()) {
+                    Row row = sheet.createRow(rowIdx++);
+                    String[] infoRow = ComparisonOutputUtils.objectInfoRow(info);
+                    for (int i = 0; i < infoRow.length; i++) {
+                        setCell(row, i, infoRow[i], i == 1 ? yellowSt : normalSt);
+                    }
+                }
+                continue;
+            }
+
             for (String line : entry.getValue()) {
+
+                String[] parts = parseObjectLine(line);
+                if (parts == null) continue;
+
                 Row row = sheet.createRow(rowIdx++);
-                CellStyle bg = (dataRowCount % 2 == 0) ? normalSt : altSt;
-                setCell(row, 0, entry.getKey(), bg);
-                setCell(row, 1, line.trim(), bg);
-                dataRowCount++;
+
+                CellStyle statusStyle = parts[1].equals("SAME")
+                        ? greenSt
+                        : (parts[1].startsWith("ONLY") ? yellowSt : redSt);
+
+                setCell(row, 0, parts[0], normalSt);
+                setCell(row, 1, parts[1], statusStyle);
+                setCell(row, 2, parts[2], normalSt);
+                setCell(row, 3, parts[3], normalSt);
+                setCell(row, 4, parts[4], "HIGH".equals(parts[4]) ? redSt : yellowSt);
+                setCell(row, 5, parts[5], normalSt);
             }
         }
-        autoSize(sheet, 2);
-    }
 
+        autoSize(sheet, 6);
+    }
+    public static void exportTriggerComparison(Map<String, List<String>> triggerResult) {
+
+        File dir = new File("output");
+        if (!dir.exists()) dir.mkdirs();
+
+        String outputPath = "output/trigger_differences.xlsx";
+
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+
+            writeTriggerSheet(wb, triggerResult, "DB1", "DB2");
+
+            try (FileOutputStream fos = new FileOutputStream(outputPath)) {
+                wb.write(fos);
+            }
+
+            System.out.println("✅ Trigger Excel created: " + outputPath);
+
+        } catch (IOException e) {
+            System.err.println("❌ Error: " + e.getMessage());
+        }
+    }
+    // ─── 7b. Packages Sheet ──────────────────────────────────────────────────
+    private static void writePackageSheet(XSSFWorkbook wb, Map<String, List<String>> result, String db1Name, String db2Name) {
+        Sheet sheet = wb.createSheet("Package Differences");
+        int rowIdx = 0;
+
+        rowIdx = addSectionTitle(sheet, wb, rowIdx, "Package Differences", 6);
+        rowIdx = addHeaderRow(sheet, wb, rowIdx, ComparisonOutputUtils.comparisonHeaders("PACKAGE_NAME", db1Name, db2Name));
+
+        CellStyle normalSt = normalStyle(wb);
+        CellStyle greenSt  = coloredStyle(wb, GREEN_HEX);
+        CellStyle redSt    = coloredStyle(wb, RED_HEX);
+        CellStyle yellowSt = coloredStyle(wb, YELLOW_HEX);
+
+        for (Map.Entry<String, List<String>> entry : result.entrySet()) {
+            if ("info".equalsIgnoreCase(entry.getKey())) {
+                for (String info : entry.getValue()) {
+                    Row row = sheet.createRow(rowIdx++);
+                    String[] infoRow = ComparisonOutputUtils.objectInfoRow(info);
+                    for (int i = 0; i < infoRow.length; i++) {
+                        setCell(row, i, infoRow[i], i == 1 ? yellowSt : normalSt);
+                    }
+                }
+                continue;
+            }
+
+            for (String line : entry.getValue()) {
+
+                String[] parts = parseObjectLine(line);
+                if (parts == null) continue;
+
+                Row row = sheet.createRow(rowIdx++);
+
+                CellStyle statusStyle = parts[1].equals("SAME")
+                        ? greenSt
+                        : (parts[1].startsWith("ONLY") ? yellowSt : redSt);
+
+                setCell(row, 0, parts[0], normalSt);
+                setCell(row, 1, parts[1], statusStyle);
+                setCell(row, 2, parts[2], normalSt);
+                setCell(row, 3, parts[3], normalSt);
+                setCell(row, 4, parts[4], "HIGH".equals(parts[4]) ? redSt : yellowSt);
+                setCell(row, 5, parts[5], normalSt);
+            }
+        }
+
+        autoSize(sheet, 6);
+    }
+    public static void exportPackageComparison(Map<String, List<String>> packageResult) {
+
+        File dir = new File("output");
+        if (!dir.exists()) dir.mkdirs();
+
+        String outputPath = "output/package_differences.xlsx";
+
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+
+            writePackageSheet(wb, packageResult, "DB1", "DB2");
+
+            try (FileOutputStream fos = new FileOutputStream(outputPath)) {
+                wb.write(fos);
+            }
+
+            System.out.println("✅ Package Excel created: " + outputPath);
+
+        } catch (IOException e) {
+            System.err.println("❌ Error: " + e.getMessage());
+        }
+    }
     // ─── 8. Compare Tables Sheet ─────────────────────────────────────────────
     private static void writeCompareTablesSheet(XSSFWorkbook wb,
                                                  DbConnectionFactory.DbConfig db1Config,
                                                  DbConnectionFactory.DbConfig db2Config) {
-        String db1 = db1Config.getDatabaseName();
-        String db2 = db2Config.getDatabaseName();
+        String db1 = DbLabelUtils.displayName(db1Config);
+        String db2 = DbLabelUtils.displayName(db2Config);
 
         List<String> d1Tables = ShowTablesService.GetNameTable(db1Config);
         List<String> d2Tables = ShowTablesService.GetNameTable(db2Config);
@@ -569,21 +814,39 @@ public class ExportExcel {
             List<String> sharedTables,
             Map<String, List<String>> functionResult,
             Map<String, List<String>> procedureResult,
-            Map<String, List<String>> triggerResult) {
+            Map<String, List<String>> triggerResult,
+            Map<String, List<String>> packageResult) {
 
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
 
-            String db1Name = db1Config.getDatabaseName();
-            String db2Name = db2Config.getDatabaseName();
+            String db1Name = DbLabelUtils.displayName(db1Config);
+            String db2Name = DbLabelUtils.displayName(db2Config);
 
             writeCompareTablesSheet(wb, db1Config, db2Config);
-            writeSharedTablesSheet(wb, sharedTables, db1Name, db2Name);
-            writeTypeSheet(wb, typeResult, db1Name, db2Name);
-            writeColumnSheet(wb, columnResult, db1Name, db2Name);
-            writeDataSheet(wb, dataResult, db1Name, db2Name);
-            writeFunctionSheet(wb, functionResult);
-            writeProcedureSheet(wb, procedureResult);
-            writeTriggerSheet(wb, triggerResult);
+            if (sharedTables != null && !sharedTables.isEmpty()) {
+                writeSharedTablesSheet(wb, sharedTables, db1Name, db2Name);
+            }
+            if (typeResult != null && !typeResult.isEmpty()) {
+                writeTypeSheet(wb, typeResult, db1Name, db2Name);
+            }
+            if (columnResult != null && !columnResult.isEmpty()) {
+                writeColumnSheet(wb, columnResult, db1Name, db2Name);
+            }
+            if (dataResult != null && !dataResult.isEmpty()) {
+                writeDataSheet(wb, dataResult, db1Name, db2Name);
+            }
+            if (functionResult != null && !functionResult.isEmpty()) {
+                writeFunctionSheet(wb, functionResult, db1Name, db2Name);
+            }
+            if (procedureResult != null && !procedureResult.isEmpty()) {
+                writeProcedureSheet(wb, procedureResult, db1Name, db2Name);
+            }
+            if (triggerResult != null && !triggerResult.isEmpty()) {
+                writeTriggerSheet(wb, triggerResult, db1Name, db2Name);
+            }
+            if (packageResult != null) {
+                writePackageSheet(wb, packageResult, db1Name, db2Name);
+            }
 
             try (FileOutputStream fos = new FileOutputStream(outputPath)) {
                 wb.write(fos);
@@ -594,6 +857,23 @@ public class ExportExcel {
         } catch (IOException e) {
             System.err.println("❌ Failed to export Excel: " + e.getMessage());
         }
+    }
+
+    // Backward-compatible overload without packageResult
+    public static void exportAll(
+            String outputPath,
+            DbConnectionFactory.DbConfig db1Config,
+            DbConnectionFactory.DbConfig db2Config,
+            Map<String, List<String>> typeResult,
+            Map<String, List<String>> columnResult,
+            Map<String, List<String>> dataResult,
+            List<String> sharedTables,
+            Map<String, List<String>> functionResult,
+            Map<String, List<String>> procedureResult,
+            Map<String, List<String>> triggerResult) {
+
+        exportAll(outputPath, db1Config, db2Config, typeResult, columnResult, dataResult,
+                sharedTables, functionResult, procedureResult, triggerResult, null);
     }
 
     // ─── Parsers (mirrored from TablePrinter) ────────────────────────────────
@@ -637,6 +917,35 @@ public class ExportExcel {
     }
 
     // ─── Utility ──────────────────────────────────────────────────────────────
+
+    private static String[] parseObjectLine(String line) {
+        if (line == null) return null;
+        String[] parts = line.split("\\|", 6);
+        if (parts.length < 2) return null;
+
+        String name = parts[0].trim();
+        String statusAndDetails = parts.length >= 2 ? parts[1].trim() : "";
+        String db1Summary = parts.length >= 3 ? parts[2].trim() : "-";
+        String db2Summary = parts.length >= 4 ? parts[3].trim() : "-";
+        String impact = parts.length >= 5 ? parts[4].trim() : "LOW";
+        String details = parts.length >= 6 ? parts[5].trim() : "";
+
+        String status;
+        if (statusAndDetails.startsWith("SAME")) {
+            status = "SAME";
+        } else if (statusAndDetails.startsWith("DIFFERENT")) {
+            status = "DIFFERENT";
+        } else if (statusAndDetails.startsWith("ONLY_IN_") || statusAndDetails.startsWith("ONLY IN ")) {
+            status = statusAndDetails;
+        } else if (statusAndDetails.startsWith("ERROR")) {
+            status = "ERROR";
+        } else {
+            status = statusAndDetails;
+        }
+
+        return new String[]{name, status, db1Summary, db2Summary, impact, details};
+    }
+
     private static byte[] hexToBytes(String hex) {
         int r = Integer.parseInt(hex.substring(0, 2), 16);
         int g = Integer.parseInt(hex.substring(2, 4), 16);

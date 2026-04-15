@@ -39,6 +39,13 @@
             <version>8.4.0</version>
         </dependency>
 
+        <!-- Oracle -->
+        <dependency>
+            <groupId>com.oracle.database.jdbc</groupId>
+            <artifactId>ojdbc8</artifactId>
+            <version>23.4.0.24.05</version>
+        </dependency>
+
         <!-- Spark -->
         <dependency>
             <groupId>com.sparkjava</groupId>

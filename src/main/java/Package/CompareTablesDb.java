@@ -1,6 +1,7 @@
 package Package;
 
 import  services.DbConnectionFactory;
+import services.DbLabelUtils;
 import services.ShowTablesService;
 import services.TablePrinter;
 
@@ -14,8 +15,8 @@ public class CompareTablesDb {
             DbConnectionFactory.DbConfig db1Config,
             DbConnectionFactory.DbConfig db2Config) {
 
-        String db1 = db1Config.getDatabaseName();
-        String db2 = db2Config.getDatabaseName();
+        String db1 = DbLabelUtils.displayName(db1Config);
+        String db2 = DbLabelUtils.displayName(db2Config);
 
         List<String> tablesDb1 = ShowTablesService.GetNameTable(db1Config);
         List<String> tablesDb2 = ShowTablesService.GetNameTable(db2Config);

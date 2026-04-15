@@ -3,6 +3,7 @@ package Package;
 import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.text.*;
+import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.*;
@@ -12,6 +13,9 @@ import java.util.*;
 import java.util.List;
 
 import services.DbConnectionFactory;
+import services.ComparisonOutputUtils;
+import services.DbLabelUtils;
+import services.ShowTablesService;
 
 public class CompareDbGui extends JFrame {
 
@@ -66,6 +70,7 @@ public class CompareDbGui extends JFrame {
     private final JTextField     db2PortField = styledField(6);
     private final JTextField     db2UserField = styledField(12);
     private final JPasswordField db2PassField = styledPass(12);
+    private final JComboBox<String> sharedEngineBox = styledEngineBox();
 
     // ── Scope chips ──────────────────────────────────────────────────────────
     private final ChipButton chipTables     = new ChipButton("Tables");
@@ -75,6 +80,7 @@ public class CompareDbGui extends JFrame {
     private final ChipButton chipFunctions  = new ChipButton("Functions");
     private final ChipButton chipProcedures = new ChipButton("Procedures");
     private final ChipButton chipTriggers   = new ChipButton("Triggers");
+    private final ChipButton chipPackages   = new ChipButton("Packages");
     private final ChipButton chipAll        = new ChipButton("All");
 
     // ── Actions ───────────────────────────────────────────────────────────────
@@ -82,7 +88,7 @@ public class CompareDbGui extends JFrame {
     private final FlatButton clearBtn = new FlatButton("Clear output",    BTN_DNG_BG, BTN_DNG_FG, BTN_DNG_B);
 
     // ── Output ────────────────────────────────────────────────────────────────
-    private final JTextPane  outputPane  = new JTextPane();
+    private final JTabbedPane resultTabs  = new JTabbedPane();
     private final StatusDot  statusDot   = new StatusDot(STATUS_IDL);
     private final JLabel     statusLabel = new JLabel("Ready");
     private final JLabel     tsLabel     = new JLabel();
@@ -90,7 +96,8 @@ public class CompareDbGui extends JFrame {
     // ─────────────────────────────────────────────────────────────────────────
 
     public CompareDbGui() {
-        DbConnectionFactory.DbConfig def = DbConnectionFactory.getDefaultConfig("default_db");
+        DbConnectionFactory.DbConfig def = DbConnectionFactory.getDefaultConfig("default_db", DbConnectionFactory.DbEngine.MYSQL);
+        sharedEngineBox.setSelectedItem("MYSQL");
         db1HostField.setText(def.getHost());
         db1PortField.setText(def.getPort());
         db1UserField.setText(def.getUser());
@@ -120,6 +127,7 @@ public class CompareDbGui extends JFrame {
 
         root.add(inner, BorderLayout.CENTER);
         setContentPane(root);
+        resetResults("Waiting for comparison to run...");
         wireEvents();
     }
 
@@ -140,7 +148,7 @@ public class CompareDbGui extends JFrame {
         title.setFont(FONT_TITLE);
         title.setForeground(TEXT_PRI);
 
-        JLabel sub = new JLabel("Compare tables, columns, data, types, functions, procedures and triggers between two MySQL databases");
+        JLabel sub = new JLabel("Compare tables, columns, data, types, functions, procedures, triggers and packages between two databases");
         sub.setFont(FONT_SUB);
         sub.setForeground(TEXT_SEC);
 
@@ -161,6 +169,9 @@ public class CompareDbGui extends JFrame {
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
 
         card.add(sectionLabel("Connection settings"));
+        card.add(Box.createVerticalStrut(12));
+
+        card.add(fieldRow("Engine", sharedEngineBox));
         card.add(Box.createVerticalStrut(12));
 
         JPanel cols = new JPanel(new GridLayout(1, 2, 20, 0));
@@ -237,6 +248,21 @@ public class CompareDbGui extends JFrame {
         return p;
     }
 
+    private JPanel fieldRow(String labelText, JComponent field) {
+        JPanel row = new JPanel(new BorderLayout(0, 0));
+        row.setOpaque(false);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 32));
+        row.setAlignmentX(LEFT_ALIGNMENT);
+
+        JLabel lbl = new JLabel(labelText);
+        lbl.setFont(FONT_LABEL);
+        lbl.setForeground(TEXT_SEC);
+        lbl.setPreferredSize(new Dimension(62, 30));
+        row.add(lbl, BorderLayout.WEST);
+        row.add(field, BorderLayout.CENTER);
+        return row;
+    }
+
     private JPanel fieldRow(String labelText, JComponent mainField, JTextField portField, int portWidth) {
         JPanel row = new JPanel(new BorderLayout(0, 0));
         row.setOpaque(false);
@@ -270,7 +296,7 @@ public class CompareDbGui extends JFrame {
         p.setAlignmentX(LEFT_ALIGNMENT);
         p.setMaximumSize(new Dimension(Integer.MAX_VALUE, 32));
         ChipButton[] chips = {chipTables, chipColumns, chipData, chipTypes,
-                chipFunctions, chipProcedures, chipTriggers, chipAll};
+                chipFunctions, chipProcedures, chipTriggers, chipPackages, chipAll};
         for (int i = 0; i < chips.length; i++) {
             if (i > 0) p.add(Box.createHorizontalStrut(6));
             p.add(chips[i]);
@@ -304,19 +330,12 @@ public class CompareDbGui extends JFrame {
 
         card.add(sectionLabel("Output"), BorderLayout.NORTH);
 
-        outputPane.setEditable(false);
-        outputPane.setFont(FONT_MONO);
-        outputPane.setBackground(BG_OUTPUT);
-        outputPane.setForeground(OUT_DEFAULT);
-        outputPane.setBorder(BorderFactory.createEmptyBorder(10, 12, 10, 12));
-        outputPane.setText("Waiting for comparison to run…");
-
-        JScrollPane scroll = new JScrollPane(outputPane);
-        scroll.setBorder(new RoundedBorder(8, BG_OUTPUT));
-        scroll.setBackground(BG_OUTPUT);
-        scroll.getViewport().setBackground(BG_OUTPUT);
-        scroll.setPreferredSize(new Dimension(0, 260));
-        card.add(scroll, BorderLayout.CENTER);
+        resultTabs.setFont(FONT_LABEL);
+        resultTabs.setBackground(BG_OUTPUT);
+        resultTabs.setForeground(OUT_DEFAULT);
+        resultTabs.setBorder(new RoundedBorder(8, BG_OUTPUT));
+        resultTabs.setPreferredSize(new Dimension(0, 260));
+        card.add(resultTabs, BorderLayout.CENTER);
 
         card.add(buildStatusBar(), BorderLayout.SOUTH);
         return card;
@@ -348,19 +367,21 @@ public class CompareDbGui extends JFrame {
             boolean on = chipAll.isOn();
             for (ChipButton c : new ChipButton[]{
                     chipTables, chipColumns, chipData, chipTypes,
-                    chipFunctions, chipProcedures, chipTriggers}) {
+                    chipFunctions, chipProcedures, chipTriggers, chipPackages}) {
                 c.setOn(on);
             }
         });
 
         clearBtn.addActionListener(e -> {
-            outputPane.setText("");
+            resetResults("Output cleared.");
             statusDot.setColor(STATUS_IDL);
             statusLabel.setText("Output cleared");
             tsLabel.setText("");
         });
 
         runBtn.addActionListener(e -> runComparison());
+
+        sharedEngineBox.addActionListener(e -> applySharedEngineDefaults());
     }
 
     // ── Comparison logic ──────────────────────────────────────────────────────
@@ -370,8 +391,10 @@ public class CompareDbGui extends JFrame {
         String db2 = db2NameField.getText().trim();
         if (!validateInputs(db1, db2)) return;
 
-        DbConnectionFactory.DbConfig cfg1 = buildDbConfig(db1, db1HostField, db1PortField, db1UserField, db1PassField);
-        DbConnectionFactory.DbConfig cfg2 = buildDbConfig(db2, db2HostField, db2PortField, db2UserField, db2PassField);
+        DbConnectionFactory.DbEngine engine = DbConnectionFactory.DbEngine.from((String) sharedEngineBox.getSelectedItem());
+
+        DbConnectionFactory.DbConfig cfg1 = buildDbConfig(db1, engine, db1HostField, db1PortField, db1UserField, db1PassField);
+        DbConnectionFactory.DbConfig cfg2 = buildDbConfig(db2, engine, db2HostField, db2PortField, db2UserField, db2PassField);
         if (cfg1 == null || cfg2 == null) return;
 
         Set<String> tables = getSelectedTablesForComparison(cfg1, cfg2);
@@ -380,23 +403,24 @@ public class CompareDbGui extends JFrame {
         runBtn.setEnabled(false);
         statusDot.setColor(STATUS_RUN);
         statusLabel.setText("Running comparison…");
+        resetResults("Running comparison...");
 
         final DbConnectionFactory.DbConfig f1 = cfg1, f2 = cfg2;
         final Set<String> ft = tables;
 
-        new SwingWorker<String, Void>() {
-            @Override protected String doInBackground() {
-                return captureComparisonOutput(f1, f2, ft);
+        new SwingWorker<ComparisonExecutionResult, Void>() {
+            @Override protected ComparisonExecutionResult doInBackground() {
+                return executeComparison(f1, f2, ft);
             }
             @Override protected void done() {
                 try {
-                    String out = get();
-                    displayOutput(out.trim().isEmpty() ? "No output generated." : out);
+                    ComparisonExecutionResult out = get();
+                    displayResults(out);
                     statusDot.setColor(STATUS_OK);
                     statusLabel.setText("Comparison completed");
                     tsLabel.setText(new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date()));
                 } catch (Exception ex) {
-                    displayOutput("Error: " + ex.getMessage());
+                    resetResults("Error: " + ex.getMessage());
                     statusDot.setColor(new Color(239, 68, 68));
                     statusLabel.setText("Comparison failed");
                 } finally {
@@ -406,7 +430,9 @@ public class CompareDbGui extends JFrame {
         }.execute();
     }
 
-    private DbConnectionFactory.DbConfig buildDbConfig(String name, JTextField host,
+    private DbConnectionFactory.DbConfig buildDbConfig(String name,
+                                                       DbConnectionFactory.DbEngine engine,
+                                                       JTextField host,
                                                        JTextField port, JTextField user, JPasswordField pass) {
         String h = host.getText().trim(), pt = port.getText().trim(), u = user.getText().trim();
         if (h.isEmpty() || pt.isEmpty() || u.isEmpty()) {
@@ -415,8 +441,32 @@ public class CompareDbGui extends JFrame {
                     "Missing connection info", JOptionPane.WARNING_MESSAGE);
             return null;
         }
-        DbConnectionFactory.DbConfig def = DbConnectionFactory.getDefaultConfig(name);
-        return new DbConnectionFactory.DbConfig(name, h, pt, u, new String(pass.getPassword()), def.getParams());
+        DbConnectionFactory.DbConfig def = DbConnectionFactory.getDefaultConfig(name, engine);
+        return new DbConnectionFactory.DbConfig(engine, name, h, pt, u, new String(pass.getPassword()), def.getParams());
+    }
+
+    private void applySharedEngineDefaults() {
+        DbConnectionFactory.DbEngine engine = DbConnectionFactory.DbEngine.from((String) sharedEngineBox.getSelectedItem());
+        DbConnectionFactory.DbConfig def = DbConnectionFactory.getDefaultConfig("default_db", engine);
+
+        applyEngineDefaultsToFieldSet(def, db1PortField, db1HostField, db1UserField);
+        applyEngineDefaultsToFieldSet(def, db2PortField, db2HostField, db2UserField);
+    }
+
+    private void applyEngineDefaultsToFieldSet(DbConnectionFactory.DbConfig def,
+                                               JTextField portField,
+                                               JTextField hostField,
+                                               JTextField userField) {
+        String portValue = portField.getText().trim();
+        if (portValue.isEmpty() || "3306".equals(portValue) || "1521".equals(portValue)) {
+            portField.setText(def.getPort());
+        }
+        if (hostField.getText().trim().isEmpty()) {
+            hostField.setText(def.getHost());
+        }
+        if (userField.getText().trim().isEmpty()) {
+            userField.setText(def.getUser());
+        }
     }
 
     private boolean validateInputs(String db1, String db2) {
@@ -435,7 +485,7 @@ public class CompareDbGui extends JFrame {
 
     private boolean hasSelectedOption() {
         return chipTables.isOn() || chipColumns.isOn() || chipData.isOn() || chipTypes.isOn()
-                || chipFunctions.isOn() || chipProcedures.isOn() || chipTriggers.isOn();
+                || chipFunctions.isOn() || chipProcedures.isOn() || chipTriggers.isOn() || chipPackages.isOn();
     }
 
     private Set<String> getSelectedTablesForComparison(DbConnectionFactory.DbConfig c1,
@@ -444,29 +494,79 @@ public class CompareDbGui extends JFrame {
         return promptTableSelection(c1, c2);
     }
 
-    private String captureComparisonOutput(DbConnectionFactory.DbConfig c1,
-                                           DbConnectionFactory.DbConfig c2, Set<String> tables) {
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        PrintStream orig = System.out;
-        PrintStream cap;
-        try { cap = new PrintStream(buf, true, "UTF-8"); }
-        catch (UnsupportedEncodingException e) { cap = new PrintStream(buf, true); }
-        try {
-            System.setOut(cap);
-            runSelectedComparisons(c1, c2, tables);
-        } finally { cap.flush(); System.setOut(orig); }
-        return new String(buf.toByteArray(), StandardCharsets.UTF_8);
-    }
+    private ComparisonExecutionResult executeComparison(DbConnectionFactory.DbConfig c1,
+                                                        DbConnectionFactory.DbConfig c2,
+                                                        Set<String> tables) {
+        ComparisonExecutionResult result = new ComparisonExecutionResult();
+        String db1Label = DbLabelUtils.displayName(c1);
+        String db2Label = DbLabelUtils.displayName(c2);
 
-    private void runSelectedComparisons(DbConnectionFactory.DbConfig c1,
-                                        DbConnectionFactory.DbConfig c2, Set<String> tables) {
-        if (chipTables.isOn())     { System.out.println("\n========== COMPARE TABLES ==========");     CompareTablesDb.compareTables(c1, c2); }
-        if (chipColumns.isOn())    { System.out.println("\n========== COMPARE COLUMNS ==========");    CompareDataService.compareColumns(c1, c2, tables); }
-        if (chipData.isOn())       { System.out.println("\n========== COMPARE DATA ==========");       CompareDataService.compareData(c1, c2, tables); }
-        if (chipTypes.isOn())      { System.out.println("\n========== COMPARE TYPES ==========");      CompareDataService.compareTypes(c1, c2, tables); }
-        if (chipFunctions.isOn())  { System.out.println("\n========== COMPARE FUNCTIONS ==========");  CompareFuncDB.compareFunctions(c1, c2); }
-        if (chipProcedures.isOn()) { System.out.println("\n========== COMPARE PROCEDURES =========="); CompareFuncDB.compareProcedures(c1, c2); }
-        if (chipTriggers.isOn())   { System.out.println("\n========== COMPARE TRIGGERS ==========");   CompareFuncDB.compareTriggers(c1, c2); }
+        List<String> db1Tables = ShowTablesService.GetNameTable(c1);
+        List<String> db2Tables = ShowTablesService.GetNameTable(c2);
+
+        if (chipTables.isOn()) {
+            result.tabs.add(buildTableDifferencesTab(db1Tables, db2Tables, db1Label, db2Label));
+        }
+
+        Map<String, List<String>> columnResult = null;
+        if (chipColumns.isOn()) {
+            columnResult = CompareDataService.compareColumnsApi(c1, c2, tables);
+            result.tabs.add(buildColumnResultTab(columnResult, db1Label, db2Label));
+        }
+
+        Map<String, List<String>> dataResult = null;
+        if (chipData.isOn()) {
+            dataResult = CompareDataService.compareDataApi(c1, c2, tables);
+            result.tabs.add(buildDataResultTab(dataResult, db1Label, db2Label));
+        }
+
+        Map<String, List<String>> typeResult = null;
+        if (chipTypes.isOn()) {
+            typeResult = CompareDataService.compareTypesApi(c1, c2, tables);
+            result.tabs.add(buildTypeResultTab(typeResult, db1Label, db2Label));
+        }
+
+        Map<String, List<String>> functionResult = null;
+        if (chipFunctions.isOn()) {
+            functionResult = CompareFuncDB.compareFunctionsApi(c1, c2);
+            result.tabs.add(buildObjectResultTab("Functions", functionResult, db1Label, db2Label));
+        }
+
+        Map<String, List<String>> procedureResult = null;
+        if (chipProcedures.isOn()) {
+            procedureResult = CompareFuncDB.compareProceduresApi(c1, c2);
+            result.tabs.add(buildObjectResultTab("Procedures", procedureResult, db1Label, db2Label));
+        }
+
+        Map<String, List<String>> triggerResult = null;
+        if (chipTriggers.isOn()) {
+            triggerResult = CompareFuncDB.compareTriggersApi(c1, c2);
+            result.tabs.add(buildObjectResultTab("Triggers", triggerResult, db1Label, db2Label));
+        }
+
+        Map<String, List<String>> packageResult = null;
+        if (chipPackages.isOn()) {
+            packageResult = CompareFuncDB.comparePackagesApi(c1, c2);
+            result.tabs.add(buildObjectResultTab("Packages", packageResult, db1Label, db2Label));
+        }
+
+        String exportPath = buildExportPath(c1, c2);
+        ExportExcel.exportAll(
+                exportPath,
+                c1,
+                c2,
+                typeResult,
+                columnResult,
+                dataResult,
+                tables == null ? Collections.<String>emptyList() : new ArrayList<String>(tables),
+                functionResult,
+                procedureResult,
+                triggerResult,
+                packageResult);
+
+        result.excelPath = exportPath;
+        result.tabs.add(0, buildSummaryTab(exportPath, result.tabs.size()));
+        return result;
     }
 
     private Set<String> promptTableSelection(DbConnectionFactory.DbConfig c1, DbConnectionFactory.DbConfig c2) {
@@ -493,20 +593,324 @@ public class CompareDbGui extends JFrame {
         return new HashSet<>(sel);
     }
 
-    // ── Output rendering (plain, no colors) ───────────────────────────────────
+    // ── Output rendering ─────────────────────────────────────────────────────
 
-    private void displayOutput(String output) {
-        output = removeAnsiCodes(output);
-        StyledDocument doc = outputPane.getStyledDocument();
+    private void displayResults(ComparisonExecutionResult output) {
+        resultTabs.removeAll();
+
+        if (output == null || output.tabs.isEmpty()) {
+            resetResults("No output generated.");
+            return;
+        }
+
+        for (ResultTableData table : output.tabs) {
+            resultTabs.addTab(table.title, buildTableComponent(table));
+        }
+    }
+
+    private void resetResults(String message) {
+        resultTabs.removeAll();
+        JTextArea area = new JTextArea(message);
+        area.setEditable(false);
+        area.setFont(FONT_MONO);
+        area.setBackground(BG_OUTPUT);
+        area.setForeground(OUT_DEFAULT);
+        area.setBorder(BorderFactory.createEmptyBorder(10, 12, 10, 12));
+        area.setLineWrap(true);
+        area.setWrapStyleWord(true);
+        resultTabs.addTab("Summary", new JScrollPane(area));
+    }
+
+    private JScrollPane buildTableComponent(ResultTableData table) {
+        DefaultTableModel model = new DefaultTableModel(table.columns, 0) {
+            @Override public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+
+        for (String[] row : table.rows) {
+            model.addRow(row);
+        }
+
+        JTable jTable = new JTable(model);
+        jTable.setFont(FONT_LABEL);
+        jTable.setRowHeight(24);
+        jTable.setFillsViewportHeight(true);
+        jTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        jTable.getTableHeader().setFont(FONT_SECTION);
+        jTable.getTableHeader().setBackground(new Color(245, 245, 243));
+        jTable.getTableHeader().setForeground(Color.BLACK);
+        jTable.setGridColor(new Color(60, 60, 63));
+        jTable.setBackground(BG_OUTPUT);
+        jTable.setForeground(OUT_DEFAULT);
+        jTable.setSelectionBackground(new Color(55, 65, 81));
+
+        for (int i = 0; i < table.columns.length; i++) {
+            int width = 140;
+            if (i == table.columns.length - 1) {
+                width = 520;
+            } else if (table.columns.length > 3) {
+                width = 180;
+            }
+            jTable.getColumnModel().getColumn(i).setPreferredWidth(width);
+        }
+
+        JScrollPane scrollPane = new JScrollPane(jTable);
+        scrollPane.setBorder(new RoundedBorder(8, BG_OUTPUT));
+        scrollPane.getViewport().setBackground(BG_OUTPUT);
+        scrollPane.setBackground(BG_OUTPUT);
+        return scrollPane;
+    }
+
+    private ResultTableData buildSummaryTab(String exportPath, int comparisonCount) {
+        List<String[]> rows = new ArrayList<String[]>();
+        rows.add(new String[]{"Excel report", exportPath});
+        rows.add(new String[]{"Rendered sections", String.valueOf(comparisonCount)});
+        return new ResultTableData("Summary", new String[]{"Item", "Value"}, rows);
+    }
+
+    private ResultTableData buildTableDifferencesTab(List<String> db1Tables,
+                                                     List<String> db2Tables,
+                                                     String db1Name,
+                                                     String db2Name) {
+        Set<String> allTables = new TreeSet<String>();
+        allTables.addAll(db1Tables);
+        allTables.addAll(db2Tables);
+
+        List<String[]> rows = new ArrayList<String[]>();
+        for (String table : allTables) {
+            rows.add(ComparisonOutputUtils.tableRow(table, db1Tables.contains(table), db2Tables.contains(table), db1Name, db2Name));
+        }
+
+        if (rows.isEmpty()) {
+            rows.add(ComparisonOutputUtils.objectInfoRow("No tables found"));
+        }
+
+        return new ResultTableData("Tables", ComparisonOutputUtils.comparisonHeaders("TABLE_NAME", db1Name, db2Name), rows);
+    }
+
+    private ResultTableData buildTypeResultTab(Map<String, List<String>> result,
+                                               String db1Name,
+                                               String db2Name) {
+        List<String[]> rows = new ArrayList<String[]>();
+        for (Map.Entry<String, List<String>> entry : result.entrySet()) {
+            if ("info".equalsIgnoreCase(entry.getKey())) {
+                for (String message : entry.getValue()) {
+                    rows.add(ComparisonOutputUtils.objectInfoRow(message));
+                }
+                continue;
+            }
+
+            for (String line : entry.getValue()) {
+                String[] parsed = parseTypeLine(line);
+                if (parsed != null) {
+                    rows.add(ComparisonOutputUtils.typeRow(entry.getKey(), parsed[0], parsed[1], parsed[2]));
+                }
+            }
+        }
+        return new ResultTableData("Types", ComparisonOutputUtils.comparisonHeaders("COLUMN_NAME", db1Name, db2Name), ensureRows(rows, 6));
+    }
+
+    private ResultTableData buildColumnResultTab(Map<String, List<String>> result,
+                                                 String db1Name,
+                                                 String db2Name) {
+        List<String[]> rows = new ArrayList<String[]>();
+        for (Map.Entry<String, List<String>> entry : result.entrySet()) {
+            if ("info".equalsIgnoreCase(entry.getKey())) {
+                for (String message : entry.getValue()) {
+                    rows.add(ComparisonOutputUtils.objectInfoRow(message));
+                }
+                continue;
+            }
+
+            for (String line : entry.getValue()) {
+                String[] parsed = parseColumnLine(line, db1Name, db2Name);
+                if (parsed != null) {
+                    rows.add(ComparisonOutputUtils.columnRow(entry.getKey(), parsed[0], parsed[1], db1Name, db2Name));
+                }
+            }
+        }
+        return new ResultTableData("Columns", ComparisonOutputUtils.comparisonHeaders("COLUMN_NAME", db1Name, db2Name), ensureRows(rows, 6));
+    }
+
+    private ResultTableData buildDataResultTab(Map<String, List<String>> result,
+                                               String db1Name,
+                                               String db2Name) {
+        List<String[]> rows = new ArrayList<String[]>();
+        for (Map.Entry<String, List<String>> entry : result.entrySet()) {
+            if ("info".equalsIgnoreCase(entry.getKey())) {
+                for (String message : entry.getValue()) {
+                    rows.add(ComparisonOutputUtils.objectInfoRow(message));
+                }
+                continue;
+            }
+
+            for (String line : entry.getValue()) {
+                String[] parsed = parseDataLine(line);
+                if (parsed != null) {
+                    rows.add(ComparisonOutputUtils.dataRow(entry.getKey(), parsed[0], parsed[1], parsed[2], parsed[3]));
+                }
+            }
+        }
+        return new ResultTableData("Data", ComparisonOutputUtils.comparisonHeaders("OBJECT_NAME", db1Name, db2Name), ensureRows(rows, 6));
+    }
+
+    private ResultTableData buildObjectResultTab(String title,
+                                                 Map<String, List<String>> result,
+                                                 String db1Name,
+                                                 String db2Name) {
+        List<String[]> rows = new ArrayList<String[]>();
+        for (Map.Entry<String, List<String>> entry : result.entrySet()) {
+            if ("info".equalsIgnoreCase(entry.getKey())) {
+                for (String message : entry.getValue()) {
+                    rows.add(ComparisonOutputUtils.objectInfoRow(message));
+                }
+                continue;
+            }
+
+            for (String line : entry.getValue()) {
+                String[] parsed = parseObjectLine(line);
+                if (parsed != null) {
+                    rows.add(parsed);
+                }
+            }
+        }
+        return new ResultTableData(
+                title,
+            ComparisonOutputUtils.comparisonHeaders(objectHeaderForTitle(title), db1Name, db2Name),
+            ensureRows(rows, 6));
+    }
+
+    private List<String[]> ensureRows(List<String[]> rows, int columnCount) {
+        if (!rows.isEmpty()) {
+            return rows;
+        }
+
+        String[] empty = new String[columnCount];
+        Arrays.fill(empty, "No differences found");
+        if (columnCount > 1) {
+            for (int i = 1; i < columnCount; i++) {
+                empty[i] = i == 1 ? "-" : "";
+            }
+        }
+        rows.add(empty);
+        return rows;
+    }
+
+    private String buildExportPath(DbConnectionFactory.DbConfig db1Config,
+                                   DbConnectionFactory.DbConfig db2Config) {
+        File dir = new File("output");
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+
+        String timestamp = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
+        return new File(dir,
+                "comparison_"
+                        + sanitizeFileName(db1Config.getDatabaseName())
+                        + "_vs_"
+                        + sanitizeFileName(db2Config.getDatabaseName())
+                        + "_"
+                        + timestamp
+                        + ".xlsx").getPath();
+    }
+
+    private String sanitizeFileName(String value) {
+        return value == null ? "db" : value.replaceAll("[^A-Za-z0-9._-]", "_");
+    }
+
+    private String[] parseTypeLine(String line) {
         try {
-            doc.remove(0, doc.getLength());
-            SimpleAttributeSet attr = new SimpleAttributeSet();
-            StyleConstants.setForeground(attr, OUT_DEFAULT);
-            StyleConstants.setFontFamily(attr, "Consolas");
-            StyleConstants.setFontSize(attr, 12);
-            doc.insertString(0, output, attr);
-        } catch (BadLocationException ex) {
-            outputPane.setText(output);
+            String after = line.substring(line.indexOf("Column ") + 7);
+            String col = after.substring(0, after.indexOf(" =>")).trim();
+
+            String rest = after.substring(after.indexOf("=>") + 2);
+            String[] parts = rest.split("\\|");
+
+            String t1 = parts[0].substring(parts[0].indexOf(":") + 1).trim();
+            String t2 = parts[1].substring(parts[1].indexOf(":") + 1).trim();
+
+            return new String[]{col, t1, t2};
+
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String[] parseColumnLine(String line, String db1, String db2) {
+        try {
+            String col = line.substring(line.lastIndexOf(":") + 1).trim();
+            String exists = line.contains(db1) ? db1 + " only" : db2 + " only";
+            return new String[]{col, exists};
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String[] parseDataLine(String line) {
+        try {
+            String row = line.substring(line.indexOf("Row ") + 4, line.indexOf(",")).trim();
+            String col = line.substring(line.indexOf("column ") + 7, line.indexOf(" differs")).trim();
+
+            String rest = line.substring(line.indexOf("differs:") + 8);
+            String[] parts = rest.split("\\|");
+
+            String v1 = parts[0].substring(parts[0].indexOf("=") + 1).trim();
+            String v2 = parts[1].substring(parts[1].indexOf("=") + 1).trim();
+
+            return new String[]{row, col, v1, v2};
+
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String[] parseObjectLine(String line) {
+        if (line == null) {
+            return null;
+        }
+
+        String[] parts = line.split("\\|", 6);
+        if (parts.length < 2) {
+            return null;
+        }
+
+        return new String[]{
+                parts[0].trim(),
+                parts[1].trim(),
+            parts.length > 2 ? parts[2].trim() : "-",
+            parts.length > 3 ? parts[3].trim() : "-",
+            parts.length > 4 ? parts[4].trim() : "LOW",
+            parts.length > 5 ? parts[5].trim() : ""
+        };
+    }
+
+    private String objectHeaderForTitle(String title) {
+        if (title == null) {
+            return "Object";
+        }
+
+        if (title.startsWith("Function")) return "Function";
+        if (title.startsWith("Procedure")) return "Procedure";
+        if (title.startsWith("Trigger")) return "Trigger";
+        if (title.startsWith("Package")) return "Package";
+        return "Object";
+    }
+
+    private static final class ComparisonExecutionResult {
+        private final List<ResultTableData> tabs = new ArrayList<ResultTableData>();
+        private String excelPath;
+    }
+
+    private static final class ResultTableData {
+        private final String title;
+        private final String[] columns;
+        private final List<String[]> rows;
+
+        private ResultTableData(String title, String[] columns, List<String[]> rows) {
+            this.title = title;
+            this.columns = columns;
+            this.rows = rows;
         }
     }
 
@@ -565,6 +969,16 @@ public class CompareDbGui extends JFrame {
         f.setOpaque(false);
         f.setPreferredSize(new Dimension(f.getPreferredSize().width, 30));
         return f;
+    }
+
+    private static JComboBox<String> styledEngineBox() {
+        JComboBox<String> box = new JComboBox<String>(new String[]{"MYSQL", "ORACLE"});
+        box.setFont(FONT_INPUT);
+        box.setForeground(TEXT_PRI);
+        box.setBorder(new RoundedBorder(7, new Color(0, 0, 0, 30)));
+        box.setBackground(new Color(246, 246, 244));
+        box.setPreferredSize(new Dimension(130, 30));
+        return box;
     }
 
     private static JPasswordField styledPass(int cols) {

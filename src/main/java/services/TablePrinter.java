@@ -1,6 +1,5 @@
 
 package services;
-import Package.ExportExcel;
 
 import java.util.List;
 import java.util.Map;
@@ -26,9 +25,8 @@ public class TablePrinter {
 
         System.out.println("\n" + BOLD + "--- Type Differences ---" + RESET);
 
-        int[] widths = {10, 20, 16, 16};
-
-        String[] headers = {"Table", "Column", db1Name, db2Name};
+        int[] widths = {30, 22, 24, 24, 10, 28};
+        String[] headers = ComparisonOutputUtils.comparisonHeaders("COLUMN_NAME", db1Name, db2Name);
 
         printHorizontalBorder(widths);
         printRow(headers, widths);
@@ -37,21 +35,24 @@ public class TablePrinter {
         for (Map.Entry<String, List<String>> entry : result.entrySet()) {
             String table = entry.getKey();
 
+            if ("info".equalsIgnoreCase(table)) {
+                for (String info : entry.getValue()) {
+                    System.out.println(info);
+                }
+                continue;
+            }
+
             for (String line : entry.getValue()) {
 
                 String[] parts = parseTypeLine(line);
                 if (parts != null) {
-
-                    System.out.print("| " + pad(table, widths[0]) + " | "
-                            + pad(parts[0], widths[1]) + " | "
-                            + RED + pad(parts[1], widths[2]) + RESET + " | "
-                            + RED + pad(parts[2], widths[3]) + RESET + " |\n");
+                    String[] row = ComparisonOutputUtils.typeRow(table, parts[0], parts[1], parts[2]);
+                    printGenericRow(row, widths, 1, 2, 3, 4);
 
                     printHorizontalBorder(widths);
                 }
             }
         }
-ExportExcel.exportTypeComparison(result, db1Name, db2Name);
     }
 
     // ─── 2. COLUMNS ────────────────────────
@@ -62,9 +63,8 @@ ExportExcel.exportTypeComparison(result, db1Name, db2Name);
 
         System.out.println("\n" + BOLD + "--- Column Differences ---" + RESET);
 
-        int[] widths = {12, 25, 25};
-
-        String[] headers = {"Table", "Column", "Exists in"};
+        int[] widths = {30, 22, 14, 14, 10, 28};
+        String[] headers = ComparisonOutputUtils.comparisonHeaders("COLUMN_NAME", db1Name, db2Name);
 
         printHorizontalBorder(widths);
         printRow(headers, widths);
@@ -73,23 +73,25 @@ ExportExcel.exportTypeComparison(result, db1Name, db2Name);
         for (Map.Entry<String, List<String>> entry : result.entrySet()) {
             String table = entry.getKey();
 
+            if ("info".equalsIgnoreCase(table)) {
+                for (String info : entry.getValue()) {
+                    System.out.println(info);
+                }
+                continue;
+            }
+
             for (String line : entry.getValue()) {
 
                 String[] parts = parseColumnLine(line, db1Name, db2Name);
 
                 if (parts != null) {
-
-                    String color = parts[1].contains(db1Name) ? YELLOW : CYAN;
-
-                    System.out.print("| " + pad(table, widths[0]) + " | "
-                            + pad(parts[0], widths[1]) + " | "
-                            + color + pad(parts[1], widths[2]) + RESET + " |\n");
+                    String[] row = ComparisonOutputUtils.columnRow(table, parts[0], parts[1], db1Name, db2Name);
+                    printGenericRow(row, widths, 1, 2, 3, 4);
 
                     printHorizontalBorder(widths);
                 }
             }
         }
-      ExportExcel.exportColumnComparison(result,db1Name,db2Name);
     }
 
 
@@ -100,9 +102,8 @@ ExportExcel.exportTypeComparison(result, db1Name, db2Name);
 
         System.out.println("\n" + BOLD + "--- Data Differences ---" + RESET);
 
-        int[] widths = {12, 10, 20, 20, 20};
-
-        String[] headers = {"Table", "Row", "Column", db1Name, db2Name};
+        int[] widths = {34, 16, 22, 22, 10, 32};
+        String[] headers = ComparisonOutputUtils.comparisonHeaders("OBJECT_NAME", db1Name, db2Name);
 
         printHorizontalBorder(widths);
         printRow(headers, widths);
@@ -111,24 +112,25 @@ ExportExcel.exportTypeComparison(result, db1Name, db2Name);
         for (Map.Entry<String, List<String>> entry : result.entrySet()) {
             String table = entry.getKey();
 
+            if ("info".equalsIgnoreCase(table)) {
+                for (String info : entry.getValue()) {
+                    System.out.println(info);
+                }
+                continue;
+            }
+
             for (String line : entry.getValue()) {
 
                 String[] parts = parseDataLine(line);
 
                 if (parts != null) {
-
-                    System.out.print("| "
-                            + pad(table, widths[0]) + " | "
-                            + pad(parts[0], widths[1]) + " | "
-                            + pad(parts[1], widths[2]) + " | "
-                            + RED + pad(parts[2], widths[3]) + RESET + " | "
-                            + RED + pad(parts[3], widths[4]) + RESET + " |\n");
+                    String[] row = ComparisonOutputUtils.dataRow(table, parts[0], parts[1], parts[2], parts[3]);
+                    printGenericRow(row, widths, 1, 2, 3, 4);
 
                     printHorizontalBorder(widths);
                 }
             }
         }
-        ExportExcel.exportDataComparison(result, db1Name, db2Name);
 
     }
 
@@ -247,70 +249,140 @@ ExportExcel.exportTypeComparison(result, db1Name, db2Name);
             return null;
         }
     }
-    public static void printComparisonFunction(Map<String, List<String>> result) {
-
-        String separator = "--------------------------------------------------------------------------------";
-        System.out.println("\n--- Function Differences ---");
-
-        for (Map.Entry<String, List<String>> entry : result.entrySet()) {
-            System.out.println("Category: " + entry.getKey());
-
-            for (String line : entry.getValue()) {
-                System.out.println("   " + line);
-
-            }
-
-        }
-
-
-
-
-        System.out.println(separator);
+    public static void printComparisonFunction(Map<String, List<String>> result, String db1Name, String db2Name) {
+        printObjectComparison("Function Differences", result, db1Name, db2Name);
 
     }
-    public static void printComparisonProcedures(Map<String, List<String>> result) {
-
-
-
-        String separator = "--------------------------------------------------------------------------------";
-        System.out.println("\n--- Procedure Differences ---");
-
-        for (Map.Entry<String, List<String>> entry : result.entrySet()) {
-            System.out.println("Category: " + entry.getKey());
-
-            for (String line : entry.getValue()) {
-                System.out.println("   " + line);
-            }
-        }
-
-
-
-
-        System.out.println(separator);
+    public static void printComparisonProcedures(Map<String, List<String>> result, String db1Name, String db2Name) {
+        printObjectComparison("Procedure Differences", result, db1Name, db2Name);
     }
-    public static void printComparisonTrigger(Map<String, List<String>> result) {
+    public static void printComparisonTrigger(Map<String, List<String>> result, String db1Name, String db2Name) {
+        printObjectComparison("Trigger Differences", result, db1Name, db2Name);
 
-        String separator = "--------------------------------------------------------------------------------";
-        System.out.println("\n--- Trigger Differences ---");
+    }
+
+    public static void printComparisonPackages(Map<String, List<String>> result, String db1Name, String db2Name) {
+        printObjectComparison("Package Differences", result, db1Name, db2Name);
+
+    }
+
+    private static void printObjectComparison(String title,
+                                              Map<String, List<String>> result,
+                                              String db1Name,
+                                              String db2Name) {
+        System.out.println("\n" + BOLD + "--- " + title + " ---" + RESET);
+
+        int[] widths = {28, 24, 24, 24, 10, 38};
+        String[] headers = ComparisonOutputUtils.comparisonHeaders(objectHeaderForTitle(title), db1Name, db2Name);
+
+        printHorizontalBorder(widths);
+        printRow(headers, widths);
+        printHorizontalBorder(widths);
 
         for (Map.Entry<String, List<String>> entry : result.entrySet()) {
-            System.out.println("Category: " + entry.getKey());
+            if ("info".equalsIgnoreCase(entry.getKey())) {
+                for (String info : entry.getValue()) {
+                    printGenericRow(ComparisonOutputUtils.objectInfoRow(info), widths, 1, 4);
+                    printHorizontalBorder(widths);
+                }
+                continue;
+            }
 
             for (String line : entry.getValue()) {
-                System.out.println("   " + line);
+                String[] parts = parseObjectLine(line);
+                if (parts == null) {
+                    continue;
+                }
+
+                String color = parts[1].startsWith("ONLY IN")
+                        ? YELLOW
+                        : ("DIFFERENT".equals(parts[1]) ? RED : GREEN);
+
+                printGenericRow(parts, widths, 1, 2, 3, 4);
+                printHorizontalBorder(widths);
             }
         }
+    }
 
-        System.out.println(separator);
+    private static void printGenericRow(String[] row,
+                                        int[] widths,
+                                        int... colorColumns) {
+        StringBuilder sb = new StringBuilder("|");
 
+        for (int i = 0; i < row.length && i < widths.length; i++) {
+            String color = null;
+            for (int colorColumn : colorColumns) {
+                if (i == colorColumn) {
+                    color = colorForValue(row[i]);
+                    break;
+                }
+            }
+
+            sb.append(" ");
+            if (color != null) {
+                sb.append(color).append(pad(row[i], widths[i])).append(RESET);
+            } else {
+                sb.append(pad(row[i], widths[i]));
+            }
+            sb.append(" |");
+        }
+
+        System.out.println(sb.toString());
+    }
+
+    private static String colorForValue(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String normalized = value.toUpperCase();
+        if (normalized.contains("HIGH") || normalized.startsWith("ONLY IN") || normalized.contains("MISSING") || normalized.contains("DIFFERENT")) {
+            return RED;
+        }
+        if (normalized.contains("MEDIUM")) {
+            return YELLOW;
+        }
+        if (normalized.contains("LOW") || normalized.contains("SHARED") || normalized.contains("PRESENT")) {
+            return GREEN;
+        }
+        return null;
+    }
+
+    private static String[] parseObjectLine(String line) {
+        if (line == null) {
+            return null;
+        }
+
+        String[] parts = line.split("\\|", 6);
+        if (parts.length < 2) {
+            return null;
+        }
+
+        String db1Summary = parts.length >= 3 ? parts[2].trim() : "-";
+        String db2Summary = parts.length >= 4 ? parts[3].trim() : "-";
+        String impact = parts.length >= 5 ? parts[4].trim() : "LOW";
+        String details = parts.length >= 6 ? parts[5].trim() : "";
+        return new String[]{parts[0].trim(), parts[1].trim(), db1Summary, db2Summary, impact, details};
+    }
+
+    private static String objectHeaderForTitle(String title) {
+        if (title == null) {
+            return "Object";
+        }
+
+        if (title.startsWith("Function")) return "Function";
+        if (title.startsWith("Procedure")) return "Procedure";
+        if (title.startsWith("Trigger")) return "Trigger";
+        if (title.startsWith("Package")) return "Package";
+        return "Object";
     }
 
     public static void compareTables(
             DbConnectionFactory.DbConfig db1Config,
             DbConnectionFactory.DbConfig db2Config) {
 
-        String db1 = db1Config.getDatabaseName();
-        String db2 = db2Config.getDatabaseName();
+        String db1 = DbLabelUtils.displayName(db1Config);
+        String db2 = DbLabelUtils.displayName(db2Config);
 
         List<String> d1Tables = ShowTablesService.GetNameTable(db1Config);
         List<String> d2Tables = ShowTablesService.GetNameTable(db2Config);
@@ -327,39 +399,20 @@ ExportExcel.exportTypeComparison(result, db1Name, db2Name);
             }
         }
 
-        int statusLength = "Exists in".length();
+        int[] widths = {30, 22, 14, 14, 10, 28};
 
-        String format = "| %-" + maxTableLength + "s | %-" + statusLength + "s |%n";
-
-        String line = "+"
-                + repeatChar('-', maxTableLength + 2)
-                + "+"
-                + repeatChar('-', statusLength + 2)
-                + "+";
-
-        // HEADER
         System.out.println("\n========== COMPARE TABLES ==========");
-        System.out.println(line);
-        System.out.printf(format, "Table", "Exists in");
-        System.out.println(line);
+        printHorizontalBorder(widths);
+        printRow(ComparisonOutputUtils.comparisonHeaders("TABLE_NAME", db1, db2), widths);
+        printHorizontalBorder(widths);
 
         // DATA
         for (String table : allTables) {
 
-            String status;
-
-            if (d1Tables.contains(table) && d2Tables.contains(table)) {
-                status = db1 + " & " + db2;
-            } else if (d1Tables.contains(table)) {
-                status = db1 + " only";
-            } else {
-                status = db2 + " only";
-            }
-
-            System.out.printf(format, table, status);
-            System.out.println(line);
+            String[] row = ComparisonOutputUtils.tableRow(table, d1Tables.contains(table), d2Tables.contains(table), db1, db2);
+            printGenericRow(row, widths, 1, 2, 3, 4);
+            printHorizontalBorder(widths);
         }
-        ExportExcel.exportTableComparison(d1Tables,d2Tables,db1,db2);
     }
 
 

@@ -18,12 +18,14 @@ public class CompareRequest {
     public DbConfig getDb2() { return db2; }
 
     public static class DbConfig {
+        private String engine;
         private String databaseName;
         private String host;
         private int port;
         private String user;
         private String password;
 
+        public String getEngine() { return engine; }
         public String getDatabaseName() { return databaseName; }
         public String getHost() { return host; }
         public int getPort() { return port; }

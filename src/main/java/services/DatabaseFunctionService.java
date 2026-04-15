@@ -1,189 +1,151 @@
 package services;
 
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 
 public class DatabaseFunctionService {
-    public static class TriggerInfo {
-        private final String eventObjectTable;
-        private final String actionTiming;
-        private final String eventManipulation;
-        private final String actionStatement;
 
-        public TriggerInfo(String eventObjectTable, String actionTiming, String eventManipulation, String actionStatement) {
-            this.eventObjectTable = eventObjectTable;
-            this.actionTiming = actionTiming;
-            this.eventManipulation = eventManipulation;
-            this.actionStatement = actionStatement;
+    // =========================================================
+    // ROUTINE PARAMETER
+    // =========================================================
+    public static class RoutineParameter {
+        private final String name;
+        private final String dataType;
+        private final String mode;
+
+        public RoutineParameter(String name, String dataType, String mode) {
+            this.name = name;
+            this.dataType = dataType;
+            this.mode = mode;
         }
 
-        public boolean sameAs(TriggerInfo other) {
-            if (other == null) {
-                return false;
+        public String getName() {
+            return name;
+        }
+
+        public String getDataType() {
+            return dataType;
+        }
+
+        public String getMode() {
+            return mode;
+        }
+    }
+
+    // =========================================================
+    // ENGINE SWITCH HELPERS
+    // =========================================================
+
+    public static Set<String> getObjectNames(DbConnectionFactory.DbConfig config,
+                                             DbObjectDiff.ObjectType type) {
+
+        if (config.getEngine() == DbConnectionFactory.DbEngine.MYSQL) {
+            return getObjectNamesMysql(config, type);
+        } else {
+            return getObjectNamesOracle(config, type);
+        }
+    }
+
+    public static String getObjectSource(DbConnectionFactory.DbConfig config,
+                                         DbObjectDiff.ObjectType type,
+                                         String name) {
+
+        if (config.getEngine() == DbConnectionFactory.DbEngine.MYSQL) {
+            return getObjectSourceMysql(config, type, name);
+        } else {
+            return getObjectSourceOracle(config, type, name);
+        }
+    }
+
+    public static Map<String, RoutineParameter> getObjectParameters(
+            DbConnectionFactory.DbConfig config,
+            DbObjectDiff.ObjectType type,
+            String name) {
+
+        if (type == DbObjectDiff.ObjectType.TRIGGER || type == DbObjectDiff.ObjectType.PACKAGE) {
+            return new LinkedHashMap<String, RoutineParameter>();
+        }
+
+        if (config.getEngine() == DbConnectionFactory.DbEngine.MYSQL) {
+            return getRoutineParametersMysql(config, name);
+        } else {
+            return getRoutineParametersOracle(config, name);
+        }
+    }
+
+    // =========================================================
+    // MYSQL IMPLEMENTATION
+    // =========================================================
+
+    private static Set<String> getObjectNamesMysql(DbConnectionFactory.DbConfig config,
+                                                   DbObjectDiff.ObjectType type) {
+
+        Set<String> list = new TreeSet<String>();
+
+        try (Connection conn = DbConnectionFactory.getConnection(config)) {
+
+            String sql;
+
+            if (type == DbObjectDiff.ObjectType.TRIGGER) {
+                sql = "SELECT TRIGGER_NAME FROM INFORMATION_SCHEMA.TRIGGERS WHERE TRIGGER_SCHEMA=?";
+            } else {
+                sql = "SELECT ROUTINE_NAME FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_SCHEMA=? AND ROUTINE_TYPE=?";
             }
-            return safeEquals(eventObjectTable, other.eventObjectTable)
-                    && safeEquals(actionTiming, other.actionTiming)
-                    && safeEquals(eventManipulation, other.eventManipulation)
-                    && safeEquals(actionStatement, other.actionStatement);
-        }
 
-        public String describe() {
-            return "table=" + safeString(eventObjectTable)
-                    + ", timing=" + safeString(actionTiming)
-                    + ", event=" + safeString(eventManipulation)
-                    + ", statement=" + safeString(actionStatement);
-        }
+            PreparedStatement ps = conn.prepareStatement(sql);
 
-        private boolean safeEquals(String left, String right) {
-            return safeString(left).equalsIgnoreCase(safeString(right));
-        }
-
-        private String safeString(String value) {
-            return value == null ? "" : value.trim();
-        }
-    }
-
-    public static class FunctionExecutionResult {
-        private final boolean executable;
-        private final boolean success;
-        private final String value;
-        private final String message;
-
-        public FunctionExecutionResult(boolean executable, boolean success, String value, String message) {
-            this.executable = executable;
-            this.success = success;
-            this.value = value;
-            this.message = message;
-        }
-
-        public boolean isExecutable() {
-            return executable;
-        }
-
-        public boolean isSuccess() {
-            return success;
-        }
-
-        public String getValue() {
-            return value;
-        }
-
-        public String getMessage() {
-            return message;
-        }
-    }
-
-    public static List<String> checkFun(String database) {
-        return checkFun(DbConnectionFactory.getDefaultConfig(database));
-    }
-
-    public static List<String> checkFun(DbConnectionFactory.DbConfig dbConfig) {
-
-        List<String> functions = new ArrayList<>();
-        String database = dbConfig.getDatabaseName();
-
-        try (Connection connection = DbConnectionFactory.getConnection(dbConfig);
-             PreparedStatement ps = connection.prepareStatement(
-                 "SELECT ROUTINE_NAME " +
-                     "FROM INFORMATION_SCHEMA.ROUTINES " +
-                     "WHERE ROUTINE_SCHEMA = ? " +
-                     "AND ROUTINE_TYPE = 'FUNCTION'"
-             )) {
-
-            ps.setString(1, database);
+            if (type == DbObjectDiff.ObjectType.TRIGGER) {
+                ps.setString(1, config.getDatabaseName());
+            } else {
+                ps.setString(1, config.getDatabaseName());
+                ps.setString(2, type == DbObjectDiff.ObjectType.FUNCTION ? "FUNCTION" : "PROCEDURE");
+            }
 
             ResultSet rs = ps.executeQuery();
 
             while (rs.next()) {
-                functions.add(rs.getString("ROUTINE_NAME"));
+                list.add(rs.getString(1));
             }
 
         } catch (SQLException e) {
             e.printStackTrace();
         }
 
-        return functions;
+        return list;
     }
 
-    public static int getFunctionParameterCount(String database, String functionName) {
-        return getRoutineParameterCount(DbConnectionFactory.getDefaultConfig(database), functionName);
-    }
+    private static String getObjectSourceMysql(DbConnectionFactory.DbConfig config,
+                                               DbObjectDiff.ObjectType type,
+                                               String name) {
 
-    public static int getFunctionParameterCount(DbConnectionFactory.DbConfig dbConfig, String functionName) {
-        return getRoutineParameterCount(dbConfig, functionName);
-    }
+        try (Connection conn = DbConnectionFactory.getConnection(config)) {
 
-    public static List<String> getProcedureNames(String database) {
-        return getRoutineNames(DbConnectionFactory.getDefaultConfig(database), "PROCEDURE");
-    }
+            String sql;
 
-    public static List<String> getProcedureNames(DbConnectionFactory.DbConfig dbConfig) {
-        return getRoutineNames(dbConfig, "PROCEDURE");
-    }
-
-    public static int getProcedureParameterCount(String database, String procedureName) {
-        return getRoutineParameterCount(DbConnectionFactory.getDefaultConfig(database), procedureName);
-    }
-
-    public static int getProcedureParameterCount(DbConnectionFactory.DbConfig dbConfig, String procedureName) {
-        return getRoutineParameterCount(dbConfig, procedureName);
-    }
-
-    public static Set<String> getTriggerNames(String database) {
-        return getTriggerNames(DbConnectionFactory.getDefaultConfig(database));
-    }
-
-    public static Set<String> getTriggerNames(DbConnectionFactory.DbConfig dbConfig) {
-        Set<String> triggerNames = new TreeSet<String>();
-        String database = dbConfig.getDatabaseName();
-
-        try (Connection connection = DbConnectionFactory.getConnection(dbConfig);
-             PreparedStatement ps = connection.prepareStatement(
-                     "SELECT TRIGGER_NAME FROM INFORMATION_SCHEMA.TRIGGERS WHERE TRIGGER_SCHEMA = ?"
-             )) {
-
-            ps.setString(1, database);
-            ResultSet rs = ps.executeQuery();
-
-            while (rs.next()) {
-                triggerNames.add(rs.getString("TRIGGER_NAME"));
+            if (type == DbObjectDiff.ObjectType.TRIGGER) {
+                sql = "SELECT ACTION_STATEMENT FROM INFORMATION_SCHEMA.TRIGGERS WHERE TRIGGER_SCHEMA=? AND TRIGGER_NAME=?";
+            } else {
+                sql = "SELECT ROUTINE_DEFINITION FROM INFORMATION_SCHEMA.ROUTINES " +
+                        "WHERE ROUTINE_SCHEMA=? AND ROUTINE_NAME=? AND ROUTINE_TYPE=?";
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
 
-        return triggerNames;
-    }
+            PreparedStatement ps = conn.prepareStatement(sql);
 
-    public static TriggerInfo getTriggerInfo(String database, String triggerName) {
-        return getTriggerInfo(DbConnectionFactory.getDefaultConfig(database), triggerName);
-    }
-
-    public static TriggerInfo getTriggerInfo(DbConnectionFactory.DbConfig dbConfig, String triggerName) {
-        String database = dbConfig.getDatabaseName();
-
-        try (Connection connection = DbConnectionFactory.getConnection(dbConfig);
-             PreparedStatement ps = connection.prepareStatement(
-                     "SELECT EVENT_OBJECT_TABLE, ACTION_TIMING, EVENT_MANIPULATION, ACTION_STATEMENT " +
-                             "FROM INFORMATION_SCHEMA.TRIGGERS " +
-                             "WHERE TRIGGER_SCHEMA = ? AND TRIGGER_NAME = ?"
-             )) {
-
-            ps.setString(1, database);
-            ps.setString(2, triggerName);
+            if (type == DbObjectDiff.ObjectType.TRIGGER) {
+                ps.setString(1, config.getDatabaseName());
+                ps.setString(2, name);
+            } else {
+                ps.setString(1, config.getDatabaseName());
+                ps.setString(2, name);
+                ps.setString(3, type == DbObjectDiff.ObjectType.FUNCTION ? "FUNCTION" : "PROCEDURE");
+            }
 
             ResultSet rs = ps.executeQuery();
+
             if (rs.next()) {
-                return new TriggerInfo(
-                        rs.getString("EVENT_OBJECT_TABLE"),
-                        rs.getString("ACTION_TIMING"),
-                        rs.getString("EVENT_MANIPULATION"),
-                        rs.getString("ACTION_STATEMENT")
-                );
+                return rs.getString(1);
             }
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -191,97 +153,260 @@ public class DatabaseFunctionService {
         return null;
     }
 
-    private static List<String> getRoutineNames(DbConnectionFactory.DbConfig dbConfig, String routineType) {
-        List<String> routineNames = new ArrayList<String>();
-        String database = dbConfig.getDatabaseName();
+    private static Map<String, RoutineParameter> getRoutineParametersMysql(
+            DbConnectionFactory.DbConfig config,
+            String name) {
 
-        try (Connection connection = DbConnectionFactory.getConnection(dbConfig);
-             PreparedStatement ps = connection.prepareStatement(
-                     "SELECT ROUTINE_NAME " +
-                             "FROM INFORMATION_SCHEMA.ROUTINES " +
-                             "WHERE ROUTINE_SCHEMA = ? " +
-                             "AND ROUTINE_TYPE = ?"
-             )) {
+        Map<String, RoutineParameter> map = new LinkedHashMap<String, RoutineParameter>();
 
-            ps.setString(1, database);
-            ps.setString(2, routineType);
+        try (Connection conn = DbConnectionFactory.getConnection(config)) {
+
+                String sql = "SELECT PARAMETER_NAME, DATA_TYPE, DTD_IDENTIFIER, PARAMETER_MODE " +
+                    "FROM INFORMATION_SCHEMA.PARAMETERS " +
+                    "WHERE SPECIFIC_SCHEMA=? AND SPECIFIC_NAME=? ORDER BY ORDINAL_POSITION";
+
+            PreparedStatement ps = conn.prepareStatement(sql);
+                ps.setString(1, config.getDatabaseName());
+                ps.setString(2, name);
 
             ResultSet rs = ps.executeQuery();
 
             while (rs.next()) {
-                routineNames.add(rs.getString("ROUTINE_NAME"));
+
+                String pname = rs.getString(1);
+                if (pname == null) pname = "RETURN";
+
+                map.put(pname,
+                        new RoutineParameter(
+                                pname,
+                        normalizeMysqlParamType(rs.getString(3), rs.getString(2)),
+                        rs.getString(4)
+                        ));
             }
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
 
-        return routineNames;
+        return map;
     }
 
-    private static int getRoutineParameterCount(DbConnectionFactory.DbConfig dbConfig, String routineName) {
-        String database = dbConfig.getDatabaseName();
+    // =========================================================
+    // ORACLE IMPLEMENTATION
+    // =========================================================
 
-        try (Connection connection = DbConnectionFactory.getConnection(dbConfig);
-             PreparedStatement ps = connection.prepareStatement(
-                     "SELECT COUNT(*) AS param_count " +
-                             "FROM INFORMATION_SCHEMA.PARAMETERS " +
-                             "WHERE SPECIFIC_SCHEMA = ? " +
-                             "AND SPECIFIC_NAME = ? " +
-                             "AND ORDINAL_POSITION > 0"
-             )) {
+    private static Set<String> getObjectNamesOracle(DbConnectionFactory.DbConfig config,
+                                                    DbObjectDiff.ObjectType type) {
 
-            ps.setString(1, database);
-            ps.setString(2, routineName);
+        Set<String> list = new TreeSet<String>();
+
+        try (Connection conn = DbConnectionFactory.getConnection(config)) {
+
+            String sql;
+
+            if (type == DbObjectDiff.ObjectType.TRIGGER) {
+                sql = "SELECT TRIGGER_NAME FROM USER_TRIGGERS";
+            } else {
+                sql = "SELECT OBJECT_NAME FROM USER_OBJECTS WHERE OBJECT_TYPE=?";
+            }
+
+            PreparedStatement ps = conn.prepareStatement(sql);
+
+            if (type != DbObjectDiff.ObjectType.TRIGGER) {
+                ps.setString(1, oracleObjectType(type));
+            }
 
             ResultSet rs = ps.executeQuery();
-            if (rs.next()) {
-                return rs.getInt("param_count");
+
+            while (rs.next()) {
+                list.add(rs.getString(1));
             }
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
 
-        return -1;
+        return list;
     }
 
-    public static FunctionExecutionResult executeFunctionForComparison(String database, String functionName, int parameterCount) {
-        return executeFunctionForComparison(DbConnectionFactory.getDefaultConfig(database), functionName, parameterCount);
-    }
+    private static String getObjectSourceOracle(DbConnectionFactory.DbConfig config,
+                                                DbObjectDiff.ObjectType type,
+                                                String name) {
+        try (Connection conn = DbConnectionFactory.getConnection(config)) {
 
-    public static FunctionExecutionResult executeFunctionForComparison(DbConnectionFactory.DbConfig dbConfig, String functionName, int parameterCount) {
-        if (parameterCount > 1) {
-            return new FunctionExecutionResult(
-                    false,
-                    false,
-                    null,
-                    "Skipped output check (" + parameterCount + " parameters)"
-            );
-        }
+            if (type == DbObjectDiff.ObjectType.PACKAGE) {
+                String spec = getOracleSourceByType(conn, name, "PACKAGE");
+                String body = getOracleSourceByType(conn, name, "PACKAGE BODY");
 
-        try (Connection connection = DbConnectionFactory.getConnection(dbConfig)) {
-            if (parameterCount == 0) {
-                String sql = "SELECT " + functionName + "() AS result";
-                try (PreparedStatement ps = connection.prepareStatement(sql);
-                     ResultSet rs = ps.executeQuery()) {
-                    if (rs.next()) {
-                        return new FunctionExecutionResult(true, true, rs.getString("result"), "");
-                    }
-                    return new FunctionExecutionResult(true, false, null, "No output returned");
+                if (spec == null && body == null) {
+                    return null;
                 }
+
+                StringBuilder merged = new StringBuilder();
+                if (spec != null) {
+                    merged.append(spec);
+                }
+                if (body != null) {
+                    if (merged.length() > 0) {
+                        merged.append("\n");
+                    }
+                    merged.append("-- PACKAGE BODY --\n").append(body);
+                }
+                return merged.toString();
             }
 
-            String sql = "SELECT " + functionName + "(?) AS result";
-            try (PreparedStatement ps = connection.prepareStatement(sql)) {
-                ps.setInt(1, 1);
-                try (ResultSet rs = ps.executeQuery()) {
-                    if (rs.next()) {
-                        return new FunctionExecutionResult(true, true, rs.getString("result"), "");
-                    }
-                    return new FunctionExecutionResult(true, false, null, "No output returned");
-                }
-            }
+            return getOracleSourceByType(conn, name, oracleSourceType(type));
+
         } catch (SQLException e) {
-            return new FunctionExecutionResult(true, false, null, e.getMessage());
+            e.printStackTrace();
         }
+
+        return null;
+    }
+
+    private static Map<String, RoutineParameter> getRoutineParametersOracle(
+            DbConnectionFactory.DbConfig config,
+            String name) {
+
+        Map<String, RoutineParameter> map = new LinkedHashMap<String, RoutineParameter>();
+
+        try (Connection conn = DbConnectionFactory.getConnection(config)) {
+
+                String sql = "SELECT ARGUMENT_NAME, DATA_TYPE, IN_OUT, DATA_LENGTH, DATA_PRECISION, DATA_SCALE, TYPE_NAME " +
+                    "FROM USER_ARGUMENTS WHERE OBJECT_NAME=? ORDER BY POSITION";
+
+            PreparedStatement ps = conn.prepareStatement(sql);
+            ps.setString(1, name.toUpperCase());
+
+            ResultSet rs = ps.executeQuery();
+
+            while (rs.next()) {
+
+                String pname = rs.getString(1);
+                if (pname == null) pname = "RETURN";
+
+                map.put(pname,
+                        new RoutineParameter(
+                                pname,
+                        normalizeOracleParamType(
+                            rs.getString(2),
+                            rs.getObject(4),
+                            rs.getObject(5),
+                            rs.getObject(6),
+                            rs.getString(7)
+                        ),
+                                rs.getString(3)
+                        ));
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return map;
+    }
+
+    private static String oracleObjectType(DbObjectDiff.ObjectType type) {
+        switch (type) {
+            case FUNCTION:
+                return "FUNCTION";
+            case PROCEDURE:
+                return "PROCEDURE";
+            case PACKAGE:
+                return "PACKAGE";
+            default:
+                return "TRIGGER";
+        }
+    }
+
+    private static String oracleSourceType(DbObjectDiff.ObjectType type) {
+        switch (type) {
+            case FUNCTION:
+                return "FUNCTION";
+            case PROCEDURE:
+                return "PROCEDURE";
+            case TRIGGER:
+                return "TRIGGER";
+            case PACKAGE:
+                return "PACKAGE";
+            default:
+                return "PROCEDURE";
+        }
+    }
+
+    private static String normalizeMysqlParamType(String dtdIdentifier, String fallbackDataType) {
+        if (dtdIdentifier != null && !dtdIdentifier.trim().isEmpty()) {
+            return dtdIdentifier.trim().toUpperCase(Locale.ROOT);
+        }
+        if (fallbackDataType != null && !fallbackDataType.trim().isEmpty()) {
+            return fallbackDataType.trim().toUpperCase(Locale.ROOT);
+        }
+        return "UNKNOWN";
+    }
+
+    private static String normalizeOracleParamType(String dataType,
+                                                   Object dataLengthObj,
+                                                   Object dataPrecisionObj,
+                                                   Object dataScaleObj,
+                                                   String typeName) {
+        String base = dataType == null ? "UNKNOWN" : dataType.trim().toUpperCase(Locale.ROOT);
+
+        if ("NUMBER".equals(base)) {
+            Integer precision = toInteger(dataPrecisionObj);
+            Integer scale = toInteger(dataScaleObj);
+            if (precision != null) {
+                if (scale != null && scale.intValue() > 0) {
+                    return base + "(" + precision + "," + scale + ")";
+                }
+                return base + "(" + precision + ")";
+            }
+            return base;
+        }
+
+        if ("VARCHAR2".equals(base) || "CHAR".equals(base) || "NCHAR".equals(base) || "NVARCHAR2".equals(base)) {
+            Integer len = toInteger(dataLengthObj);
+            if (len != null && len.intValue() > 0) {
+                return base + "(" + len + ")";
+            }
+            return base;
+        }
+
+        if (("TABLE".equals(base) || "PL/SQL RECORD".equals(base)) && typeName != null && !typeName.trim().isEmpty()) {
+            return base + "(" + typeName.trim().toUpperCase(Locale.ROOT) + ")";
+        }
+
+        return base;
+    }
+
+    private static Integer toInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number) {
+            return Integer.valueOf(((Number) value).intValue());
+        }
+        try {
+            return Integer.valueOf(String.valueOf(value));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private static String getOracleSourceByType(Connection conn, String name, String type) throws SQLException {
+        StringBuilder sb = new StringBuilder();
+
+        String sql = "SELECT TEXT FROM USER_SOURCE WHERE NAME=? AND TYPE=? ORDER BY LINE";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, name.toUpperCase());
+            ps.setString(2, type);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    sb.append(rs.getString(1));
+                }
+            }
+        }
+
+        return sb.length() == 0 ? null : sb.toString();
     }
 }

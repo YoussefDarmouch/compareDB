@@ -16,7 +16,7 @@ public class ApiServer {
         Gson gson = new Gson();
 
         before((req, res) -> {
-            res.header("Access-Control-Allow-Origin", "http://localhost:4200");
+            res.header("Access-Control-Allow-Origin", "http://localhost:64402");
             res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
             res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
@@ -39,20 +39,21 @@ public class ApiServer {
                 new java.util.function.Function<CompareRequest.DbConfig, DbConnectionFactory.DbConfig>() {
                     @Override
                     public DbConnectionFactory.DbConfig apply(CompareRequest.DbConfig db) {
+                        DbConnectionFactory.DbEngine engine = DbConnectionFactory.DbEngine.from(db.getEngine());
                         return new DbConnectionFactory.DbConfig(
+                            engine,
                                 db.getDatabaseName(),
                                 db.getHost(),
                                 String.valueOf(db.getPort()),
                                 db.getUser(),
                                 db.getPassword(),
-                                "useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+                            engine == DbConnectionFactory.DbEngine.ORACLE
+                                ? ""
+                                : "useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
                         );
                     }
                 };
 
-        // ======================
-        // TABLES
-        // ======================
         post("/api/compare/tables", (req, res) -> {
 
             CompareRequest request = gson.fromJson(req.body(), CompareRequest.class);
@@ -66,9 +67,6 @@ public class ApiServer {
             return gson.toJson(result);
         });
 
-        // ======================
-        // COLUMNS
-        // ======================
         post("/api/compare/columns", (req, res) -> {
 
             CompareRequest request = gson.fromJson(req.body(), CompareRequest.class);
@@ -84,9 +82,7 @@ public class ApiServer {
             return gson.toJson(result);
         });
 
-        // ======================
-        // DATA
-        // ======================
+        
         post("/api/compare/data", (req, res) -> {
 
             CompareRequest request = gson.fromJson(req.body(), CompareRequest.class);
@@ -100,9 +96,7 @@ public class ApiServer {
             return gson.toJson(result);
         });
 
-        // ======================
-        // TYPES
-        // ======================
+      
         post("/api/compare/types", (req, res) -> {
 
             CompareRequest request = gson.fromJson(req.body(), CompareRequest.class);
@@ -116,9 +110,7 @@ public class ApiServer {
             return gson.toJson(result);
         });
 
-        // ======================
-        // FUNCTIONS
-        // ======================
+       
         post("/api/compare/functions", (req, res) -> {
 
             CompareRequest request = gson.fromJson(req.body(), CompareRequest.class);
@@ -132,9 +124,7 @@ public class ApiServer {
             return gson.toJson(result);
         });
 
-        // ======================
-        // PROCEDURES
-        // ======================
+        
         post("/api/compare/procedures", (req, res) -> {
 
             CompareRequest request = gson.fromJson(req.body(), CompareRequest.class);
@@ -148,9 +138,7 @@ public class ApiServer {
             return gson.toJson(result);
         });
 
-        // ======================
-        // TRIGGERS
-        // ======================
+     
         post("/api/compare/triggers", (req, res) -> {
 
             CompareRequest request = gson.fromJson(req.body(), CompareRequest.class);
@@ -159,6 +147,19 @@ public class ApiServer {
             DbConnectionFactory.DbConfig db2 = buildDb.apply(request.getDb2());
 
             Object result = service.compareTriggers(db1, db2);
+
+            res.type("application/json");
+            return gson.toJson(result);
+        });
+
+        post("/api/compare/packages", (req, res) -> {
+
+            CompareRequest request = gson.fromJson(req.body(), CompareRequest.class);
+
+            DbConnectionFactory.DbConfig db1 = buildDb.apply(request.getDb1());
+            DbConnectionFactory.DbConfig db2 = buildDb.apply(request.getDb2());
+
+            Object result = service.comparePackages(db1, db2);
 
             res.type("application/json");
             return gson.toJson(result);

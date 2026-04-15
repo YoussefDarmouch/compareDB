@@ -3,6 +3,7 @@ package Package;
 import services.TableColumnsService;
 import services.ShowTablesService;
 import services.DbConnectionFactory;
+import services.DbLabelUtils;
 import services.TablePrinter;
 
 
@@ -11,6 +12,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Objects;
@@ -82,8 +87,8 @@ public class CompareDataService {
 
     private static void printMissingTables(DbConnectionFactory.DbConfig db1Config,
                                            DbConnectionFactory.DbConfig db2Config) {
-        String db1 = db1Config.getDatabaseName();
-        String db2 = db2Config.getDatabaseName();
+        String db1 = DbLabelUtils.displayName(db1Config);
+        String db2 = DbLabelUtils.displayName(db2Config);
 
         List<String> tablesInDb1 = ShowTablesService.GetNameTable(db1Config);
         List<String> tablesInDb2 = ShowTablesService.GetNameTable(db2Config);
@@ -154,8 +159,8 @@ public class CompareDataService {
             DbConnectionFactory.DbConfig db2Config,
             Set<String> selectedTables) {
 
-        String db1 = db1Config.getDatabaseName();
-        String db2 = db2Config.getDatabaseName();
+        String db1 = DbLabelUtils.displayName(db1Config);
+        String db2 = DbLabelUtils.displayName(db2Config);
 
         Map<String, List<String>> result = new HashMap<>();
         List<String> sharedTables = getSharedTables(db1Config, db2Config, selectedTables);
@@ -193,7 +198,6 @@ public class CompareDataService {
         if (!hasDifference) {
             result.put("info", Collections.singletonList("No type differences found"));
         }
-
         return result;
     }
 
@@ -213,8 +217,8 @@ public class CompareDataService {
 
         Map<String, List<String>> result = compareTypesLogic(db1Config, db2Config, selectedTables);
         TablePrinter.printTypeComparison(result,                // ← table output
-                db1Config.getDatabaseName(),
-                db2Config.getDatabaseName());
+            DbLabelUtils.displayName(db1Config),
+            DbLabelUtils.displayName(db2Config));
     }
 
 
@@ -235,8 +239,8 @@ public class CompareDataService {
             DbConnectionFactory.DbConfig db2Config,
             Set<String> selectedTables) {
 
-        String db1 = db1Config.getDatabaseName();
-        String db2 = db2Config.getDatabaseName();
+        String db1 = DbLabelUtils.displayName(db1Config);
+        String db2 = DbLabelUtils.displayName(db2Config);
 
         Map<String, List<String>> result = new HashMap<>();
         List<String> sharedTables = getSharedTables(db1Config, db2Config, selectedTables);
@@ -293,8 +297,8 @@ public class CompareDataService {
 
         Map<String, List<String>> result = compareColumnsLogic(db1Config, db2Config, selectedTables);
         TablePrinter.printColumnComparison(result,
-                db1Config.getDatabaseName(),
-                db2Config.getDatabaseName());
+            DbLabelUtils.displayName(db1Config),
+            DbLabelUtils.displayName(db2Config));
 
 
     }
@@ -317,10 +321,11 @@ public class CompareDataService {
             DbConnectionFactory.DbConfig db2Config,
             Set<String> selectedTables) {
 
-        String db1Name = db1Config.getDatabaseName();
-        String db2Name = db2Config.getDatabaseName();
+        String db1Name = DbLabelUtils.displayName(db1Config);
+        String db2Name = DbLabelUtils.displayName(db2Config);
 
-        Map<String, List<String>> result = new HashMap<>();
+        Map<String, List<String>> result = new LinkedHashMap<>();
+
         List<String> sharedTables = getSharedTables(db1Config, db2Config, selectedTables);
 
         if (sharedTables.isEmpty()) {
@@ -328,48 +333,62 @@ public class CompareDataService {
             return result;
         }
 
-        boolean hasDifference = false;
-
         for (String table : sharedTables) {
 
-            Map<String, Map<String, String>> dataInDb1 = TableColumnsService.GetData(db1Config, table);
-            Map<String, Map<String, String>> dataInDb2 = TableColumnsService.GetData(db2Config, table);
+            Map<String, Map<String, String>> db1Data = TableColumnsService.GetData(db1Config, table);
+            Map<String, Map<String, String>> db2Data = TableColumnsService.GetData(db2Config, table);
 
             List<String> diff = new ArrayList<>();
 
-            // 🔥 جمع جميع IDs
-            Set<String> allIds = new HashSet<>();
-            allIds.addAll(dataInDb1.keySet());
-            allIds.addAll(dataInDb2.keySet());
+            Set<String> allIds = new LinkedHashSet<>();
+            allIds.addAll(db1Data.keySet());
+            allIds.addAll(db2Data.keySet());
 
             for (String id : allIds) {
 
-                Map<String, String> row1 = dataInDb1.get(id);
-                Map<String, String> row2 = dataInDb2.get(id);
+                Map<String, String> row1 = db1Data.get(id);
+                Map<String, String> row2 = db2Data.get(id);
 
-                // ❗ row ناقص
+                // =========================
+                // CASE 1: missing row
+                // =========================
                 if (row1 == null || row2 == null) {
-                    diff.add("Row " + id + " is missing in one of the databases");
-                    hasDifference = true;
+
+                    Map<String, String> base = (row1 != null) ? row1 : row2;
+
+                    if (base != null) {
+                        for (String col : base.keySet()) {
+
+                            String v1 = (row1 == null) ? null : row1.get(col);
+                            String v2 = (row2 == null) ? null : row2.get(col);
+
+                            diff.add("Row " + id + ", column " + col + " differs: "
+                                    + db1Name + "=" + v1 + " | "
+                                    + db2Name + "=" + v2);
+                        }
+                    } else {
+                        diff.add("Row " + id + " is missing in both databases");
+                    }
+
                     continue;
                 }
 
-                // 🔍 compare columns
-                Set<String> allColumns = new HashSet<>();
-                allColumns.addAll(row1.keySet());
-                allColumns.addAll(row2.keySet());
+                // =========================
+                // CASE 2: compare columns
+                // =========================
+                Set<String> allCols = new LinkedHashSet<>();
+                allCols.addAll(row1.keySet());
+                allCols.addAll(row2.keySet());
 
-                for (String column : allColumns) {
+                for (String col : allCols) {
 
-                    String val1 = row1.get(column);
-                    String val2 = row2.get(column);
+                    String v1 = row1.get(col);
+                    String v2 = row2.get(col);
 
-                    if (!Objects.equals(val1, val2)) {
-                        diff.add("Row " + id + ", column " + column + " differs: " +
-                                db1Name + "=" + val1 + " | " +
-                                db2Name + "=" + val2);
-
-                        hasDifference = true;
+                    if (!Objects.equals(v1, v2)) {
+                        diff.add("Row " + id + ", column " + col + " differs: "
+                                + db1Name + "=" + v1 + " | "
+                                + db2Name + "=" + v2);
                     }
                 }
             }
@@ -379,12 +398,14 @@ public class CompareDataService {
             }
         }
 
-        if (!hasDifference) {
+        if (result.isEmpty()) {
             result.put("info", Collections.singletonList("No data differences found."));
         }
 
         return result;
     }
+
+
 
     // API
     public static Map<String, List<String>> compareDataApi(
@@ -402,7 +423,7 @@ public class CompareDataService {
 
         Map<String, List<String>> result = compareDataLogic(db1Config, db2Config, selectedTables);
         TablePrinter.printDataComparison(result,                // ← table output
-                db1Config.getDatabaseName(),
-                db2Config.getDatabaseName());
+            DbLabelUtils.displayName(db1Config),
+            DbLabelUtils.displayName(db2Config));
     }
 }
