@@ -4,6 +4,7 @@ import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.text.*;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableCellRenderer;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.*;
@@ -16,6 +17,7 @@ import services.DbConnectionFactory;
 import services.ComparisonOutputUtils;
 import services.DbLabelUtils;
 import services.ShowTablesService;
+import services.TablePrinter;
 
 public class CompareDbGui extends JFrame {
 
@@ -528,26 +530,30 @@ public class CompareDbGui extends JFrame {
 
         Map<String, List<String>> functionResult = null;
         if (chipFunctions.isOn()) {
-            functionResult = CompareFuncDB.compareFunctionsApi(c1, c2);
-            result.tabs.add(buildObjectResultTab("Functions", functionResult, db1Label, db2Label));
+            List<services.DbObjectDiff> functionDiffs = CompareFuncDB.compareFunctionsDiffs(c1, c2);
+            functionResult = CompareFuncDB.diffsToMap("functions", functionDiffs, db1Label, db2Label);
+            result.tabs.add(buildObjectDiffTab("Functions", "FUNCTION", functionDiffs, db1Label, db2Label, false));
         }
 
         Map<String, List<String>> procedureResult = null;
         if (chipProcedures.isOn()) {
-            procedureResult = CompareFuncDB.compareProceduresApi(c1, c2);
-            result.tabs.add(buildObjectResultTab("Procedures", procedureResult, db1Label, db2Label));
+            List<services.DbObjectDiff> procedureDiffs = CompareFuncDB.compareProceduresDiffs(c1, c2);
+            procedureResult = CompareFuncDB.diffsToMap("procedures", procedureDiffs, db1Label, db2Label);
+            result.tabs.add(buildObjectDiffTab("Procedures", "PROCEDURE", procedureDiffs, db1Label, db2Label, false));
         }
 
         Map<String, List<String>> triggerResult = null;
         if (chipTriggers.isOn()) {
-            triggerResult = CompareFuncDB.compareTriggersApi(c1, c2);
-            result.tabs.add(buildObjectResultTab("Triggers", triggerResult, db1Label, db2Label));
+            List<services.DbObjectDiff> triggerDiffs = CompareFuncDB.compareTriggersDiffs(c1, c2);
+            triggerResult = CompareFuncDB.diffsToMap("triggers", triggerDiffs, db1Label, db2Label);
+            result.tabs.add(buildObjectDiffTab("Triggers", "TRIGGER", triggerDiffs, db1Label, db2Label, false));
         }
 
         Map<String, List<String>> packageResult = null;
         if (chipPackages.isOn()) {
-            packageResult = CompareFuncDB.comparePackagesApi(c1, c2);
-            result.tabs.add(buildObjectResultTab("Packages", packageResult, db1Label, db2Label));
+            List<services.DbObjectDiff> packageDiffs = CompareFuncDB.comparePackagesDiffs(c1, c2);
+            packageResult = CompareFuncDB.diffsToMap("packages", packageDiffs, db1Label, db2Label);
+            result.tabs.add(buildObjectDiffTab("Packages", "PACKAGE", packageDiffs, db1Label, db2Label, true));
         }
 
         String exportPath = buildExportPath(c1, c2);
@@ -566,6 +572,80 @@ public class CompareDbGui extends JFrame {
 
         result.excelPath = exportPath;
         result.tabs.add(0, buildSummaryTab(exportPath, result.tabs.size()));
+
+        // Capture each comparison output in its own console tab.
+        final Map<String, List<String>> finalColumnResult = columnResult;
+        final Map<String, List<String>> finalDataResult = dataResult;
+        final Map<String, List<String>> finalTypeResult = typeResult;
+
+        if (chipTables.isOn()) {
+            result.consoleTabs.add(new ConsoleTabData("Tables", captureConsoleOutput(new Runnable() {
+                @Override public void run() {
+                    System.out.println("\n========== COMPARE TABLES ==========");
+                    CompareTablesDb.compareTables(c1, c2);
+                }
+            })));
+        }
+        if (chipColumns.isOn()) {
+            result.consoleTabs.add(new ConsoleTabData("Columns", captureConsoleOutput(new Runnable() {
+                @Override public void run() {
+                    System.out.println("\n========== COMPARE COLUMNS ==========");
+                    TablePrinter.printColumnComparison(finalColumnResult, db1Label, db2Label);
+                }
+            })));
+        }
+        if (chipData.isOn()) {
+            result.consoleTabs.add(new ConsoleTabData("Data", captureConsoleOutput(new Runnable() {
+                @Override public void run() {
+                    System.out.println("\n========== COMPARE DATA ==========");
+                    TablePrinter.printDataComparison(finalDataResult, db1Label, db2Label);
+                }
+            })));
+        }
+        if (chipTypes.isOn()) {
+            result.consoleTabs.add(new ConsoleTabData("Types", captureConsoleOutput(new Runnable() {
+                @Override public void run() {
+                    System.out.println("\n========== COMPARE TYPES ==========");
+                    TablePrinter.printTypeComparison(finalTypeResult, db1Label, db2Label);
+                }
+            })));
+        }
+        if (chipFunctions.isOn()) {
+            final List<services.DbObjectDiff> functionDiffs = CompareFuncDB.compareFunctionsDiffs(c1, c2);
+            result.consoleTabs.add(new ConsoleTabData("Functions", captureConsoleOutput(new Runnable() {
+                @Override public void run() {
+                    System.out.println("\n========== COMPARE FUNCTIONS ==========");
+                    TablePrinter.printDiffsFunction(functionDiffs, db1Label, db2Label);
+                }
+            })));
+        }
+        if (chipProcedures.isOn()) {
+            final List<services.DbObjectDiff> procedureDiffs = CompareFuncDB.compareProceduresDiffs(c1, c2);
+            result.consoleTabs.add(new ConsoleTabData("Procedures", captureConsoleOutput(new Runnable() {
+                @Override public void run() {
+                    System.out.println("\n========== COMPARE PROCEDURES ==========");
+                    TablePrinter.printDiffsProcedure(procedureDiffs, db1Label, db2Label);
+                }
+            })));
+        }
+        if (chipTriggers.isOn()) {
+            final List<services.DbObjectDiff> triggerDiffs = CompareFuncDB.compareTriggersDiffs(c1, c2);
+            result.consoleTabs.add(new ConsoleTabData("Triggers", captureConsoleOutput(new Runnable() {
+                @Override public void run() {
+                    System.out.println("\n========== COMPARE TRIGGERS ==========");
+                    TablePrinter.printDiffsTrigger(triggerDiffs, db1Label, db2Label);
+                }
+            })));
+        }
+        if (chipPackages.isOn()) {
+            final List<services.DbObjectDiff> packageDiffs = CompareFuncDB.comparePackagesDiffs(c1, c2);
+            result.consoleTabs.add(new ConsoleTabData("Packages", captureConsoleOutput(new Runnable() {
+                @Override public void run() {
+                    System.out.println("\n========== COMPARE PACKAGES ==========");
+                    TablePrinter.printDiffsPackage(packageDiffs, db1Label, db2Label);
+                }
+            })));
+        }
         return result;
     }
 
@@ -598,14 +678,48 @@ public class CompareDbGui extends JFrame {
     private void displayResults(ComparisonExecutionResult output) {
         resultTabs.removeAll();
 
-        if (output == null || output.tabs.isEmpty()) {
+        if (output == null) {
             resetResults("No output generated.");
             return;
         }
 
-        for (ResultTableData table : output.tabs) {
-            resultTabs.addTab(table.title, buildTableComponent(table));
+        if (output.consoleTabs.isEmpty()) {
+            resetResults("No console output generated.");
+            return;
         }
+
+        for (ConsoleTabData tab : output.consoleTabs) {
+            JTextArea area = new JTextArea(tab.content == null ? "" : tab.content);
+            area.setEditable(false);
+            area.setFont(FONT_MONO);
+            area.setBackground(BG_OUTPUT);
+            area.setForeground(OUT_DEFAULT);
+            area.setCaretColor(OUT_DEFAULT);
+            area.setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
+            area.setLineWrap(true);
+            area.setWrapStyleWord(true);
+
+            JScrollPane pane = new JScrollPane(area);
+            pane.setBorder(new RoundedBorder(8, BG_OUTPUT));
+            pane.getViewport().setBackground(BG_OUTPUT);
+            pane.setBackground(BG_OUTPUT);
+            resultTabs.addTab(tab.title, pane);
+        }
+    }
+
+    private String captureConsoleOutput(Runnable action) {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PrintStream oldOut = System.out;
+        try {
+            PrintStream ps = new PrintStream(baos, true, StandardCharsets.UTF_8.name());
+            System.setOut(ps);
+            action.run();
+        } catch (Exception ignored) {
+            return "";
+        } finally {
+            System.setOut(oldOut);
+        }
+        return removeAnsiCodes(new String(baos.toByteArray(), StandardCharsets.UTF_8));
     }
 
     private void resetResults(String message) {
@@ -655,11 +769,54 @@ public class CompareDbGui extends JFrame {
             jTable.getColumnModel().getColumn(i).setPreferredWidth(width);
         }
 
+        // Wrap long text (typically "DETAILS") so it doesn't stay on one line.
+        int detailsCol = table.columns.length - 1;
+        if (detailsCol >= 0) {
+            jTable.getColumnModel().getColumn(detailsCol).setCellRenderer(new WrapCellRenderer());
+        }
+
         JScrollPane scrollPane = new JScrollPane(jTable);
         scrollPane.setBorder(new RoundedBorder(8, BG_OUTPUT));
         scrollPane.getViewport().setBackground(BG_OUTPUT);
         scrollPane.setBackground(BG_OUTPUT);
         return scrollPane;
+    }
+
+    private final class WrapCellRenderer extends JTextArea implements TableCellRenderer {
+        private WrapCellRenderer() {
+            setLineWrap(true);
+            setWrapStyleWord(true);
+            setOpaque(true);
+            setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(
+                JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+
+            setFont(table.getFont());
+            setText(value == null ? "" : String.valueOf(value));
+
+            if (isSelected) {
+                setBackground(table.getSelectionBackground());
+                setForeground(table.getSelectionForeground());
+            } else {
+                setBackground(table.getBackground());
+                setForeground(table.getForeground());
+            }
+
+            // Auto-grow row height to fit wrapped text at current column width.
+            int colWidth = table.getColumnModel().getColumn(column).getWidth();
+            if (colWidth > 0) {
+                setSize(new Dimension(colWidth, Short.MAX_VALUE));
+                int prefH = getPreferredSize().height;
+                if (table.getRowHeight(row) != prefH) {
+                    table.setRowHeight(row, Math.max(24, prefH));
+                }
+            }
+
+            return this;
+        }
     }
 
     private ResultTableData buildSummaryTab(String exportPath, int comparisonCount) {
@@ -781,6 +938,95 @@ public class CompareDbGui extends JFrame {
             ensureRows(rows, 6));
     }
 
+    private ResultTableData buildObjectDiffTab(String title,
+                                               String objectLabel,
+                                               List<services.DbObjectDiff> diffs,
+                                               String db1Name,
+                                               String db2Name,
+                                               boolean packageMode) {
+        List<String[]> rows = new ArrayList<String[]>();
+        String[] columns = packageMode
+                ? new String[]{objectLabel, "STATUS", db1Name, db2Name, "IMPACT", "DETAILS"}
+                : new String[]{objectLabel, "STATUS", db1Name, db2Name, "IMPACT", "EXEC_RESULT", "DETAILS"};
+
+        if (diffs == null || diffs.isEmpty()) {
+            rows.add(packageMode
+                    ? new String[]{"(no differences)", "", "", "", "", ""}
+                    : new String[]{"(no differences)", "", "", "", "", "", ""});
+            return new ResultTableData(title, columns, rows);
+        }
+
+        for (services.DbObjectDiff diff : diffs) {
+            if (packageMode) {
+                rows.add(new String[]{
+                        diff.getObjectName(),
+                        resolveStatusLabel(diff, db1Name, db2Name),
+                        buildObjDbCell(diff, true),
+                        buildObjDbCell(diff, false),
+                        buildObjImpact(diff),
+                        buildDetailsText(diff, db1Name, db2Name)
+                });
+            } else {
+                rows.add(new String[]{
+                        diff.getObjectName(),
+                        resolveStatusLabel(diff, db1Name, db2Name),
+                        buildObjDbCell(diff, true),
+                        buildObjDbCell(diff, false),
+                        buildObjImpact(diff),
+                        safeText(diff.getExecutionResult()),
+                        buildDetailsText(diff, db1Name, db2Name)
+                });
+            }
+        }
+        return new ResultTableData(title, columns, rows);
+    }
+
+    private String resolveStatusLabel(services.DbObjectDiff diff, String db1Name, String db2Name) {
+        switch (diff.getChangeType()) {
+            case ADDED: return "ONLY IN " + db1Name;
+            case REMOVED: return "ONLY IN " + db2Name;
+            case MODIFIED: return "DIFFERENT";
+            default: return diff.getChangeType().name();
+        }
+    }
+
+    private String buildObjDbCell(services.DbObjectDiff diff, boolean leftSide) {
+        if (diff.getChangeType() == services.DbObjectDiff.ChangeType.ADDED) {
+            if (leftSide) {
+                int n = diff.getDb1SourceLines();
+                return n > 0 ? "Present (" + n + " lines)" : "PRESENT";
+            }
+            return "MISSING";
+        }
+        if (diff.getChangeType() == services.DbObjectDiff.ChangeType.REMOVED) {
+            if (!leftSide) {
+                int n = diff.getDb2SourceLines();
+                return n > 0 ? "Present (" + n + " lines)" : "PRESENT";
+            }
+            return "MISSING";
+        }
+        int n = leftSide ? diff.getDb1SourceLines() : diff.getDb2SourceLines();
+        return n > 0 ? "Src " + n + " lines" : "UNCHANGED";
+    }
+
+    private String buildObjImpact(services.DbObjectDiff diff) {
+        if (diff.getChangeType() != services.DbObjectDiff.ChangeType.MODIFIED) return "HIGH";
+        if (diff.getSourceChangesCount() >= 5 || diff.getParameterChangesCount() >= 2) return "HIGH";
+        if (diff.getSourceChangesCount() > 0 || diff.getParameterChangesCount() > 0) return "MEDIUM";
+        return "LOW";
+    }
+
+    private String buildDetailsText(services.DbObjectDiff diff, String db1Name, String db2Name) {
+        return services.DbObjectDiffFormatter.formatSummaryRow(diff, db1Name, db2Name).split("\\|", 6).length >= 6
+                ? services.DbObjectDiffFormatter.formatSummaryRow(diff, db1Name, db2Name).split("\\|", 6)[5]
+                : "";
+    }
+
+    private String safeText(String value) {
+        if (value == null || value.trim().isEmpty()) return "-";
+        return value.trim();
+    }
+
     private List<String[]> ensureRows(List<String[]> rows, int columnCount) {
         if (!rows.isEmpty()) {
             return rows;
@@ -900,6 +1146,17 @@ public class CompareDbGui extends JFrame {
     private static final class ComparisonExecutionResult {
         private final List<ResultTableData> tabs = new ArrayList<ResultTableData>();
         private String excelPath;
+        private final List<ConsoleTabData> consoleTabs = new ArrayList<ConsoleTabData>();
+    }
+
+    private static final class ConsoleTabData {
+        private final String title;
+        private final String content;
+
+        private ConsoleTabData(String title, String content) {
+            this.title = title;
+            this.content = content;
+        }
     }
 
     private static final class ResultTableData {
