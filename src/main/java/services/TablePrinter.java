@@ -682,6 +682,11 @@ public class TablePrinter {
             return lines;
         }
 
+        if (width <= 0) {
+            lines.add("");
+            return lines;
+        }
+
         // First split on explicit newlines, then word-wrap each segment
         String[] segments = text.split("\n", -1);
         for (String segment : segments) {
@@ -693,13 +698,34 @@ public class TablePrinter {
             StringBuilder current = new StringBuilder();
 
             for (String word : words) {
-                if (current.length() + word.length() + (current.length() > 0 ? 1 : 0) <= width) {
+                if (word == null) word = "";
+
+                // If the word itself is longer than width, hard-wrap it in chunks.
+                if (word.length() > width) {
+                    // Flush current line first
+                    if (current.length() > 0) {
+                        lines.add(current.toString());
+                        current.setLength(0);
+                    }
+
+                    int idx = 0;
+                    while (idx < word.length()) {
+                        int end = Math.min(idx + width, word.length());
+                        lines.add(word.substring(idx, end));
+                        idx = end;
+                    }
+                    continue;
+                }
+
+                int extra = (current.length() > 0 ? 1 : 0) + word.length();
+                if (current.length() + extra <= width) {
                     if (current.length() > 0) current.append(" ");
                     current.append(word);
-                } else {
-                    if (current.length() > 0) lines.add(current.toString());
-                    current = new StringBuilder(word);
+                    continue;
                 }
+
+                if (current.length() > 0) lines.add(current.toString());
+                current = new StringBuilder(word);
             }
 
             if (current.length() > 0) {
