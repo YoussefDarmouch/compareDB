@@ -1,24 +1,21 @@
 package Package;
 
-import services.TableColumnsService;
-import services.ShowTablesService;
-import services.DbConnectionFactory;
-import services.DbLabelUtils;
-import services.TablePrinter;
-
-
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-
-
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+
+import services.DbConnectionFactory;
+import services.DbLabelUtils;
+import services.ShowTablesService;
+import services.TableColumnsService;
+import services.TablePrinter;
 
 public class CompareDataService {
 
@@ -422,8 +419,9 @@ public class CompareDataService {
             Set<String> selectedTables) {
 
         Map<String, List<String>> result = compareDataLogic(db1Config, db2Config, selectedTables);
-        TablePrinter.printDataComparison(result,                // ← table output
+        TablePrinter.printDataComparison(result,                
             DbLabelUtils.displayName(db1Config),
             DbLabelUtils.displayName(db2Config));
+           
     }
 }

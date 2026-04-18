@@ -142,29 +142,26 @@ public final class DbObjectDiffFormatter {
 
     private static String buildDbSummary(DbObjectDiff diff, boolean leftSide) {
         if (diff.getChangeType() == DbObjectDiff.ChangeType.ADDED) {
-            return leftSide ? "PRESENT" : "MISSING";
+            int totalLines = leftSide ? diff.getDb1SourceLines() : diff.getDb2SourceLines();
+            return leftSide
+                    ? (totalLines > 0 ? "Present (" + totalLines + " lines)" : "PRESENT")
+                    : "MISSING";
         }
         if (diff.getChangeType() == DbObjectDiff.ChangeType.REMOVED) {
-            return leftSide ? "MISSING" : "PRESENT";
+            int totalLines = leftSide ? diff.getDb1SourceLines() : diff.getDb2SourceLines();
+            return leftSide
+                    ? "MISSING"
+                    : (totalLines > 0 ? "Present (" + totalLines + " lines)" : "PRESENT");
         }
 
-        StringBuilder sb = new StringBuilder();
-        if (diff.getSourceChangesCount() > 0) {
-            sb.append("Src ").append(diff.getSourceChangesCount()).append(" lines");
+        int totalLines = leftSide ? diff.getDb1SourceLines() : diff.getDb2SourceLines();
+        if (totalLines > 0) {
+            return "Src " + totalLines + " lines";
         }
 
-        String params = buildParameterSummary(diff, leftSide);
-        if (!"-".equals(params)) {
-            if (sb.length() > 0) {
-                sb.append("; ");
-            }
-            sb.append("Params ").append(params);
-        }
-
-        if (sb.length() == 0) {
-            return "UNCHANGED";
-        }
-        return sb.toString();
+        return diff.getSourceChangesCount() > 0
+                ? "Src " + diff.getSourceChangesCount() + " lines"
+                : "UNCHANGED";
     }
 
     private static String buildParameterSummary(DbObjectDiff diff, boolean leftSide) {
@@ -223,43 +220,145 @@ public final class DbObjectDiffFormatter {
             return "Object exists only in " + safe(db2Name);
         }
 
-        StringBuilder sb = new StringBuilder();
-        if (!diff.getSourceDiffs().isEmpty()) {
-            sb.append("Changed lines ");
-            for (int i = 0; i < diff.getSourceDiffs().size(); i++) {
-                if (i > 0) {
-                    sb.append(", ");
+        if (!diff.getSubProgramDiffs().isEmpty()) {
+            // Build a map of line number -> source diff for quick lookup
+            java.util.Map<Integer, DbObjectDiff.SourceDiffLine> diffByLine =
+                    new java.util.LinkedHashMap<Integer, DbObjectDiff.SourceDiffLine>();
+            for (DbObjectDiff.SourceDiffLine dl : diff.getSourceDiffs()) {
+                diffByLine.put(dl.getLineNumber(), dl);
+            }
+
+            StringBuilder sb = new StringBuilder();
+            if (diff.getSimilarity() >= 0) {
+                sb.append("Similarity: ").append(String.format("%.0f%%", diff.getSimilarity() * 100)).append("\n");
+            }
+            for (DbObjectDiff.SubProgramDiff sp : diff.getSubProgramDiffs()) {
+                if (sb.length() > 0 && sb.charAt(sb.length() - 1) != '\n') sb.append("\n");
+                sb.append(sp.getName())
+                  .append(" -> ")
+                  .append(sp.getStatus())
+                  .append(" (")
+                  .append(sp.getStartLine())
+                  .append("-")
+                  .append(sp.getEndLine())
+                  .append(")");
+                if ("DIFFERENT".equals(sp.getStatus()) && !sp.getChangedLines().isEmpty()) {
+                    sb.append(" changed: ");
+                    appendLineList(sb, sp.getChangedLines());
+                    int shown = 0;
+                    for (int ln : sp.getChangedLines()) {
+                        DbObjectDiff.SourceDiffLine dl = diffByLine.get(ln);
+                        if (dl != null && shown < 3) {
+                            String tag = dl.getChangeType() != null ? dl.getChangeType() : "DIFF";
+                            sb.append("\n  L").append(ln).append(" [").append(tag).append("] ");
+                            sb.append(safe(db1Name)).append("= ").append(trimValue(dl.getOldLine()));
+                            sb.append(" / ");
+                            sb.append(safe(db2Name)).append("= ").append(trimValue(dl.getNewLine()));
+                            if (dl.getCharChangeSummary() != null) {
+                                sb.append("\n    tokens: ").append(trimValue(dl.getCharChangeSummary()));
+                            }
+                            shown++;
+                        }
+                    }
+                    if (sp.getChangedLines().size() > 3) {
+                        sb.append("\n  ... and ").append(sp.getChangedLines().size() - 3).append(" more lines");
+                    }
                 }
-                sb.append(diff.getSourceDiffs().get(i).getLineNumber());
+            }
+            return sb.toString();
+        }
+
+        StringBuilder sb = new StringBuilder();
+        if (diff.getSimilarity() >= 0) {
+            sb.append("Similarity: ").append(String.format("%.0f%%", diff.getSimilarity() * 100)).append("\n");
+        }
+        if (!diff.getSourceDiffs().isEmpty()) {
+            sb.append("Changed lines: ");
+            appendLineList(sb, extractSourceLineNumbers(diff.getSourceDiffs()));
+            // Show actual diffs (up to 3)
+            int shown = 0;
+            for (DbObjectDiff.SourceDiffLine dl : diff.getSourceDiffs()) {
+                if (shown >= 3) break;
+                String tag = dl.getChangeType() != null ? dl.getChangeType() : "DIFF";
+                sb.append("\n  L").append(dl.getLineNumber()).append(" [").append(tag).append("] ");
+                sb.append(safe(db1Name)).append("= ").append(trimValue(dl.getOldLine()));
+                sb.append(" / ");
+                sb.append(safe(db2Name)).append("= ").append(trimValue(dl.getNewLine()));
+                if (dl.getCharChangeSummary() != null) {
+                    sb.append("\n    tokens: ").append(trimValue(dl.getCharChangeSummary()));
+                }
+                shown++;
+            }
+            if (diff.getSourceDiffs().size() > 3) {
+                sb.append("\n  ... and ").append(diff.getSourceDiffs().size() - 3).append(" more");
             }
         }
 
         if (!diff.getParameterDiffs().isEmpty()) {
-            if (sb.length() > 0) {
-                sb.append("; ");
-            }
-            sb.append("Params ");
+            if (sb.length() > 0) sb.append("\n");
+            sb.append("Parameters:");
             for (int i = 0; i < diff.getParameterDiffs().size(); i++) {
-                if (i > 0) {
-                    sb.append(", ");
-                }
-
+                if (i > 0) sb.append("\n");
                 DbObjectDiff.ParameterDiffLine line = diff.getParameterDiffs().get(i);
-                sb.append(safe(line.getParameterName()))
-                        .append(" ")
-                        .append(formatTransition(line.getOldMode(), line.getOldDataType(), line.getNewMode(), line.getNewDataType()));
+                sb.append("- ")
+                  .append(safe(line.getParameterName()))
+                  .append(": ")
+                  .append(formatTransition(line.getOldMode(), line.getOldDataType(),
+                                          line.getNewMode(), line.getNewDataType()));
             }
         }
 
         if (sb.length() == 0) {
             return "No detailed differences captured";
         }
-
         return sb.toString().replace('|', '/');
     }
 
     private static String formatTransition(String oldMode, String oldType, String newMode, String newType) {
         return compactSignature(oldMode, oldType) + " -> " + compactSignature(newMode, newType);
+    }
+
+    private static java.util.List<Integer> extractSourceLineNumbers(List<DbObjectDiff.SourceDiffLine> diffs) {
+        java.util.List<Integer> numbers = new java.util.ArrayList<Integer>();
+        for (DbObjectDiff.SourceDiffLine line : diffs) {
+            numbers.add(line.getLineNumber());
+        }
+        return numbers;
+    }
+
+    private static void appendLineList(StringBuilder sb, java.util.List<Integer> nums) {
+        if (nums == null || nums.isEmpty()) {
+            return;
+        }
+
+        java.util.List<Integer> sorted = new java.util.ArrayList<Integer>(nums);
+        java.util.Collections.sort(sorted);
+
+        int start = sorted.get(0);
+        int prev = start;
+        for (int i = 1; i <= sorted.size(); i++) {
+            int cur = i < sorted.size() ? sorted.get(i) : -1;
+            if (cur == prev + 1) {
+                prev = cur;
+                continue;
+            }
+
+            if (sb.length() > 0) {
+                char last = sb.charAt(sb.length() - 1);
+                if (last != ' ' && last != ':') {
+                    sb.append(", ");
+                }
+            }
+
+            if (start == prev) {
+                sb.append(start);
+            } else {
+                sb.append(start).append("-").append(prev);
+            }
+
+            start = cur;
+            prev = cur;
+        }
     }
 
     private static String compactSignature(String mode, String type) {
@@ -286,5 +385,13 @@ public final class DbObjectDiffFormatter {
             return "";
         }
         return value.trim();
+    }
+
+    private static String trimValue(String line) {
+        if (line == null) return "<none>";
+        String trimmed = line.trim();
+        if (trimmed.isEmpty()) return "<empty>";
+        if (trimmed.length() > 60) return trimmed.substring(0, 57) + "...";
+        return trimmed;
     }
 }

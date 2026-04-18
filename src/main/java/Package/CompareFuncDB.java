@@ -2,9 +2,12 @@ package Package;
 
 import services.DbConnectionFactory;
 import services.DbLabelUtils;
-import services.DbObjectComparisonService;
 import services.DbObjectDiff;
 import services.DbObjectDiffFormatter;
+import services.FunctionComparisonService;
+import services.ProcedureComparisonService;
+import services.TriggerComparisonService;
+import services.PackageComparisonService;
 import services.TablePrinter;
 
 import java.util.ArrayList;
@@ -39,9 +42,11 @@ public class CompareFuncDB {
     public static void compareFunctions(
             DbConnectionFactory.DbConfig db1Config,
             DbConnectionFactory.DbConfig db2Config) {
-
-        Map<String, List<String>> result = compareFunctionsLogic(db1Config, db2Config);
-        TablePrinter.printComparisonFunction(result, buildDisplayLabel(db1Config), buildDisplayLabel(db2Config));
+        TablePrinter.printDiffsFunction(
+                compareFunctionsDiffs(db1Config, db2Config),
+                buildDisplayLabel(db1Config),
+                buildDisplayLabel(db2Config)
+        );
     }
 
     public static void compareProcedures(String db1, String db2) {
@@ -68,9 +73,11 @@ public class CompareFuncDB {
     public static void compareProcedures(
             DbConnectionFactory.DbConfig db1Config,
             DbConnectionFactory.DbConfig db2Config) {
-
-        Map<String, List<String>> result = compareProceduresLogic(db1Config, db2Config);
-        TablePrinter.printComparisonProcedures(result, buildDisplayLabel(db1Config), buildDisplayLabel(db2Config));
+        TablePrinter.printDiffsProcedure(
+                compareProceduresDiffs(db1Config, db2Config),
+                buildDisplayLabel(db1Config),
+                buildDisplayLabel(db2Config)
+        );
     }
 
     public static void compareTriggers(String db1, String db2) {
@@ -97,9 +104,11 @@ public class CompareFuncDB {
     public static void compareTriggers(
             DbConnectionFactory.DbConfig db1Config,
             DbConnectionFactory.DbConfig db2Config) {
-
-        Map<String, List<String>> result = compareTriggersLogic(db1Config, db2Config);
-        TablePrinter.printComparisonTrigger(result, buildDisplayLabel(db1Config), buildDisplayLabel(db2Config));
+        TablePrinter.printDiffsTrigger(
+                compareTriggersDiffs(db1Config, db2Config),
+                buildDisplayLabel(db1Config),
+                buildDisplayLabel(db2Config)
+        );
     }
 
     public static void comparePackages(String db1, String db2) {
@@ -126,9 +135,47 @@ public class CompareFuncDB {
     public static void comparePackages(
             DbConnectionFactory.DbConfig db1Config,
             DbConnectionFactory.DbConfig db2Config) {
+        TablePrinter.printDiffsPackage(
+                comparePackagesDiffs(db1Config, db2Config),
+                buildDisplayLabel(db1Config),
+                buildDisplayLabel(db2Config)
+        );
+    }
 
-        Map<String, List<String>> result = comparePackagesLogic(db1Config, db2Config);
-        TablePrinter.printComparisonPackages(result, buildDisplayLabel(db1Config), buildDisplayLabel(db2Config));
+    // ──────────────────────────────────────────────────────────────────────────
+    // Rich-display methods: return raw diffs for direct table rendering
+    // ──────────────────────────────────────────────────────────────────────────
+
+    public static List<DbObjectDiff> compareFunctionsDiffs(DbConnectionFactory.DbConfig db1, DbConnectionFactory.DbConfig db2) {
+        return FunctionComparisonService.compare(db1, db2);
+    }
+
+    public static List<DbObjectDiff> compareProceduresDiffs(DbConnectionFactory.DbConfig db1, DbConnectionFactory.DbConfig db2) {
+        return ProcedureComparisonService.compare(db1, db2);
+    }
+
+    public static List<DbObjectDiff> compareTriggersDiffs(DbConnectionFactory.DbConfig db1, DbConnectionFactory.DbConfig db2) {
+        return TriggerComparisonService.compare(db1, db2);
+    }
+
+    public static List<DbObjectDiff> comparePackagesDiffs(DbConnectionFactory.DbConfig db1, DbConnectionFactory.DbConfig db2) {
+        return PackageComparisonService.compare(db1, db2);
+    }
+
+    /** Convert a List<DbObjectDiff> to the Map format used by ExportExcel. */
+    public static Map<String, List<String>> diffsToMap(String key, List<DbObjectDiff> diffs,
+                                                       String db1Label, String db2Label) {
+        Map<String, List<String>> result = new LinkedHashMap<String, List<String>>();
+        if (diffs.isEmpty()) {
+            result.put("info", Collections.singletonList("No differences found"));
+            return result;
+        }
+        List<String> rows = new ArrayList<String>();
+        for (DbObjectDiff diff : diffs) {
+            rows.add(DbObjectDiffFormatter.formatSummaryRow(diff, db1Label, db2Label));
+        }
+        result.put(key, rows);
+        return result;
     }
 
     private static Map<String, List<String>> compareByType(
@@ -138,7 +185,22 @@ public class CompareFuncDB {
             String resultKey,
             String noDiffMessage) {
 
-        List<DbObjectDiff> diffs = DbObjectComparisonService.compareObjects(db1Config, db2Config, objectType);
+        List<DbObjectDiff> diffs;
+        switch (objectType) {
+            case FUNCTION:
+                diffs = compareFunctionsDiffs(db1Config, db2Config);
+                break;
+            case PROCEDURE:
+                diffs = compareProceduresDiffs(db1Config, db2Config);
+                break;
+            case TRIGGER:
+                diffs = compareTriggersDiffs(db1Config, db2Config);
+                break;
+            case PACKAGE:
+            default:
+                diffs = comparePackagesDiffs(db1Config, db2Config);
+                break;
+        }
 
         Map<String, List<String>> result = new LinkedHashMap<String, List<String>>();
         if (diffs.isEmpty()) {

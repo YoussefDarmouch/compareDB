@@ -16,7 +16,7 @@ public class ApiServer {
         Gson gson = new Gson();
 
         before((req, res) -> {
-            res.header("Access-Control-Allow-Origin", "http://localhost:64402");
+            res.header("Access-Control-Allow-Origin", "http://localhost:4200");
             res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
             res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
 

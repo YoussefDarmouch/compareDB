@@ -57,6 +57,22 @@ public class DatabaseFunctionService {
         }
     }
 
+    /**
+     * Oracle {@code USER_SOURCE} text for {@code TYPE = 'PACKAGE BODY'} only (no package spec).
+     * Returns {@code null} when the engine is not Oracle, on error, or when the body object does not exist.
+     */
+    public static String getPackageBodySource(DbConnectionFactory.DbConfig config, String name) {
+        if (config.getEngine() != DbConnectionFactory.DbEngine.ORACLE) {
+            return null;
+        }
+        try (Connection conn = DbConnectionFactory.getConnection(config)) {
+            return getOracleSourceByType(conn, name, "PACKAGE BODY");
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
     public static Map<String, RoutineParameter> getObjectParameters(
             DbConnectionFactory.DbConfig config,
             DbObjectDiff.ObjectType type,

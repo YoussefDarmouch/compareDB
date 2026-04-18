@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.*;
 import services.DbConnectionFactory;
 import services.DbLabelUtils;
+import services.DbObjectDiff;
 import services.TablePrinter;
 
 public class CompareDbConsole {
@@ -56,38 +57,78 @@ public class CompareDbConsole {
     }
 
 
-    private static DbConnectionFactory.DbConfig readDbConfig(DbConnectionFactory.DbEngine engine) {
+//    private static DbConnectionFactory.DbConfig readDbConfig(DbConnectionFactory.DbEngine engine) {
+//
+//        System.out.print("Database name: ");
+//        String name = scanner.nextLine();
+//
+//        System.out.print("Host (default: localhost): ");
+//        String host = scanner.nextLine();
+//
+//        String defaultPort = engine == DbConnectionFactory.DbEngine.ORACLE ? "1521" : "3306";
+//        System.out.print("Port (default: " + defaultPort + "): ");
+//        String port = scanner.nextLine();
+//
+//        System.out.print("User: ");
+//        String user = scanner.nextLine();
+//
+//        System.out.print("Password: ");
+//        String pass = scanner.nextLine();
+//
+//        DbConnectionFactory.DbConfig def = DbConnectionFactory.getDefaultConfig(name, engine);
+//
+//        return new DbConnectionFactory.DbConfig(
+//            engine,
+//                name,
+//                host.isEmpty() ? def.getHost() : host,
+//                port.isEmpty() ? def.getPort() : port,
+//                user,
+//                pass,
+//                def.getParams()
+//        );
+//    }
+//
+private static DbConnectionFactory.DbConfig readDbConfig(DbConnectionFactory.DbEngine engine) {
 
-        System.out.print("Database name: ");
-        String name = scanner.nextLine();
+    // 🔥 DEFAULT VALUES (change them once here)
+    String defaultName = "XEPDB1";
+    String defaultHost = "localhost";
+    String defaultPort = engine == DbConnectionFactory.DbEngine.ORACLE ? "1521" : "3306";
+    String defaultUser = "d1";
+    String defaultPass = "1234";
 
-        System.out.print("Host (default: localhost): ");
-        String host = scanner.nextLine();
+    System.out.print("Database name [" + defaultName + "]: ");
+    String name = scanner.nextLine();
+    if (name.isEmpty()) name = defaultName;
 
-        String defaultPort = engine == DbConnectionFactory.DbEngine.ORACLE ? "1521" : "3306";
-        System.out.print("Port (default: " + defaultPort + "): ");
-        String port = scanner.nextLine();
+    System.out.print("Host [" + defaultHost + "]: ");
+    String host = scanner.nextLine();
+    if (host.isEmpty()) host = defaultHost;
 
-        System.out.print("User: ");
-        String user = scanner.nextLine();
+    System.out.print("Port [" + defaultPort + "]: ");
+    String port = scanner.nextLine();
+    if (port.isEmpty()) port = defaultPort;
 
-        System.out.print("Password: ");
-        String pass = scanner.nextLine();
+    System.out.print("User [" + defaultUser + "]: ");
+    String user = scanner.nextLine();
+    if (user.isEmpty()) user = defaultUser;
 
-        DbConnectionFactory.DbConfig def = DbConnectionFactory.getDefaultConfig(name, engine);
+    System.out.print("Password [" + defaultPass + "]: ");
+    String pass = scanner.nextLine();
+    if (pass.isEmpty()) pass = defaultPass;
 
-        return new DbConnectionFactory.DbConfig(
+    DbConnectionFactory.DbConfig def = DbConnectionFactory.getDefaultConfig(name, engine);
+
+    return new DbConnectionFactory.DbConfig(
             engine,
-                name,
-                host.isEmpty() ? def.getHost() : host,
-                port.isEmpty() ? def.getPort() : port,
-                user,
-                pass,
-                def.getParams()
-        );
-    }
-
-
+            name,
+            host,
+            port,
+            user,
+            pass,
+            def.getParams()
+    );
+}
 
     private static Set<String> readOptions() {
         System.out.println("\nSelect comparison options (comma separated):");
@@ -218,26 +259,30 @@ public class CompareDbConsole {
 
         if (options.contains("functions")) {
             System.out.println("\n========== COMPARE FUNCTIONS ==========");
-            functionResult = CompareFuncDB.compareFunctionsApi(c1, c2);
-            TablePrinter.printComparisonFunction(functionResult, db1Label, db2Label);
+            List<DbObjectDiff> funcDiffs = CompareFuncDB.compareFunctionsDiffs(c1, c2);
+            TablePrinter.printDiffsFunction(funcDiffs, db1Label, db2Label);
+            functionResult = CompareFuncDB.diffsToMap("functions", funcDiffs, db1Label, db2Label);
         }
 
         if (options.contains("procedures")) {
             System.out.println("\n========== COMPARE PROCEDURES ==========");
-            procedureResult = CompareFuncDB.compareProceduresApi(c1, c2);
-            TablePrinter.printComparisonProcedures(procedureResult, db1Label, db2Label);
+            List<DbObjectDiff> procDiffs = CompareFuncDB.compareProceduresDiffs(c1, c2);
+            TablePrinter.printDiffsProcedure(procDiffs, db1Label, db2Label);
+            procedureResult = CompareFuncDB.diffsToMap("procedures", procDiffs, db1Label, db2Label);
         }
 
         if (options.contains("triggers")) {
             System.out.println("\n========== COMPARE TRIGGERS ==========");
-            triggerResult = CompareFuncDB.compareTriggersApi(c1, c2);
-            TablePrinter.printComparisonTrigger(triggerResult, db1Label, db2Label);
+            List<DbObjectDiff> trigDiffs = CompareFuncDB.compareTriggersDiffs(c1, c2);
+            TablePrinter.printDiffsTrigger(trigDiffs, db1Label, db2Label);
+            triggerResult = CompareFuncDB.diffsToMap("triggers", trigDiffs, db1Label, db2Label);
         }
 
         if (options.contains("packages")) {
             System.out.println("\n========== COMPARE PACKAGES ==========");
-            packageResult = CompareFuncDB.comparePackagesApi(c1, c2);
-            TablePrinter.printComparisonPackages(packageResult, db1Label, db2Label);
+            List<DbObjectDiff> pkgDiffs = CompareFuncDB.comparePackagesDiffs(c1, c2);
+            TablePrinter.printDiffsPackage(pkgDiffs, db1Label, db2Label);
+            packageResult = CompareFuncDB.diffsToMap("packages", pkgDiffs, db1Label, db2Label);
         }
 
         String reportPath = buildExportPath(c1, c2);
