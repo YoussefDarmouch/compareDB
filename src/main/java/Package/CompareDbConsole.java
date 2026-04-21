@@ -1,14 +1,8 @@
 package Package;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Scanner;
-import java.util.Set;
 
 import services.DbConnectionFactory;
 import services.DbLabelUtils;
@@ -33,13 +27,17 @@ public class CompareDbConsole {
         System.out.println("\nEnter Target Database (DB2):");
         DbConnectionFactory.DbConfig db2 = readDbConfig(engine);
 
-        // ✅ FIX
         Set<String> options = readOptions(engine);
 
         Set<String> tables = new HashSet<>();
-        if (options.contains("columns") || options.contains("data") || options.contains("types")) {
+
+        boolean needsTables =
+                options.contains("columns") ||
+                        options.contains("data") ||
+                        options.contains("types");
+
+        if (needsTables) {
             tables = selectTables(db1, db2);
-            if (tables == null) return;
         }
 
         System.out.println("\n🚀 Running comparison...\n");
@@ -83,7 +81,7 @@ public class CompareDbConsole {
         );
     }
 
-    // ✅ IMPORTANT FIX
+    // ================= OPTIONS =================
     private static Set<String> readOptions(DbConnectionFactory.DbEngine engine) {
 
         System.out.println("\nOptions:");
@@ -102,8 +100,8 @@ public class CompareDbConsole {
         if (input.contains("9") || input.contains("all")) {
 
             set.addAll(Arrays.asList(
-                    "tables","columns","data","types",
-                    "functions","procedures","triggers"
+                    "tables", "columns", "data", "types",
+                    "functions", "procedures", "triggers"
             ));
 
             if (engine == DbConnectionFactory.DbEngine.ORACLE) {
@@ -118,7 +116,7 @@ public class CompareDbConsole {
             String opt = normalize(s);
 
             if ("packages".equals(opt) &&
-                engine != DbConnectionFactory.DbEngine.ORACLE) continue;
+                    engine != DbConnectionFactory.DbEngine.ORACLE) continue;
 
             if (!opt.isEmpty()) set.add(opt);
         }
@@ -142,6 +140,7 @@ public class CompareDbConsole {
         return t;
     }
 
+    // ================= TABLE SELECTION (FIXED) =================
     private static Set<String> selectTables(DbConnectionFactory.DbConfig c1,
                                             DbConnectionFactory.DbConfig c2) {
 
@@ -149,26 +148,49 @@ public class CompareDbConsole {
 
         if (shared.isEmpty()) {
             System.out.println("No tables.");
-            return null;
+            return new HashSet<>();
         }
+
+        System.out.println("\n--- Shared Tables ---");
 
         for (int i = 0; i < shared.size(); i++) {
-            System.out.println((i+1)+". "+shared.get(i));
+            System.out.println((i + 1) + ". " + shared.get(i));
         }
 
-        String input = scanner.nextLine();
+        int allOption = shared.size() + 1;
+        System.out.println(allOption + ". all");
 
-        if (input.equalsIgnoreCase("all")) return new HashSet<>(shared);
+        System.out.print("\nSelect tables (e.g. 1,3 or " + allOption + " for all): ");
 
-        Set<String> set = new HashSet<>();
+        String input = scanner.nextLine().trim().toLowerCase();
+
+        if (input.equals("all") || input.equals(String.valueOf(allOption))) {
+            return new HashSet<>(shared);
+        }
+
+        Set<String> selected = new HashSet<>();
+
         for (String s : input.split(",")) {
-            int i = Integer.parseInt(s.trim()) - 1;
-            if (i >= 0 && i < shared.size()) set.add(shared.get(i));
+            try {
+                int i = Integer.parseInt(s.trim());
+
+                if (i == allOption) {
+                    return new HashSet<>(shared);
+                }
+
+                i--;
+
+                if (i >= 0 && i < shared.size()) {
+                    selected.add(shared.get(i));
+                }
+
+            } catch (Exception ignored) {}
         }
 
-        return set;
+        return selected;
     }
 
+    // ================= COMPARISON =================
     private static String runComparisons(DbConnectionFactory.DbConfig c1,
                                          DbConnectionFactory.DbConfig c2,
                                          Set<String> tables,
@@ -216,9 +238,8 @@ public class CompareDbConsole {
             trigR = CompareFuncDB.diffsToMap("triggers", d, db1, db2);
         }
 
-        // ✅ ORACLE ONLY
         if (options.contains("packages") &&
-            c1.getEngine() == DbConnectionFactory.DbEngine.ORACLE) {
+                c1.getEngine() == DbConnectionFactory.DbEngine.ORACLE) {
 
             List<DbObjectDiff> d = CompareFuncDB.comparePackagesDiffs(c1,c2);
             TablePrinter.printDiffsPackage(d, db1, db2);
@@ -230,7 +251,7 @@ public class CompareDbConsole {
         ExportExcel.exportAll(
                 path,c1,c2,
                 typeR,colR,dataR,
-                tables==null?Collections.emptyList():new ArrayList<>(tables),
+                tables == null ? Collections.emptyList() : new ArrayList<>(tables),
                 funR,procR,trigR,packR
         );
 
@@ -246,6 +267,7 @@ public class CompareDbConsole {
         String t = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss")
                 .format(new java.util.Date());
 
-        return "output/compare_"+d1.getDatabaseName()+"_vs_"+d2.getDatabaseName()+"_"+t+".xlsx";
+        return "output/compare_" + d1.getDatabaseName() +
+                "_vs_" + d2.getDatabaseName() + "_" + t + ".xlsx";
     }
 }
