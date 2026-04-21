@@ -1,7 +1,15 @@
 package Package;
 
 import java.io.File;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Scanner;
+import java.util.Set;
+
 import services.DbConnectionFactory;
 import services.DbLabelUtils;
 import services.DbObjectDiff;
@@ -17,171 +25,122 @@ public class CompareDbConsole {
         System.out.println("     DATABASE COMPARATOR ");
         System.out.println("==================================\n");
 
-        DbConnectionFactory.DbEngine sharedEngine = readSharedEngine();
+        DbConnectionFactory.DbEngine engine = readSharedEngine();
 
         System.out.println("Enter Source Database (DB1):");
-        DbConnectionFactory.DbConfig db1 = readDbConfig(sharedEngine);
+        DbConnectionFactory.DbConfig db1 = readDbConfig(engine);
 
         System.out.println("\nEnter Target Database (DB2):");
-        DbConnectionFactory.DbConfig db2 = readDbConfig(sharedEngine);
+        DbConnectionFactory.DbConfig db2 = readDbConfig(engine);
 
-
-        Set<String> options = readOptions();
+        // ✅ FIX
+        Set<String> options = readOptions(engine);
 
         Set<String> tables = new HashSet<>();
         if (options.contains("columns") || options.contains("data") || options.contains("types")) {
             tables = selectTables(db1, db2);
-            if (tables == null) {
-                System.out.println("❌ Operation canceled.");
-                return;
-            }
+            if (tables == null) return;
         }
-
 
         System.out.println("\n🚀 Running comparison...\n");
 
         String reportPath = runComparisons(db1, db2, tables, options);
-        if (reportPath != null) {
-            System.out.println("\n📄 Excel report: " + reportPath);
-        }
 
+        System.out.println("\n📄 Excel report: " + reportPath);
         System.out.println("\n✅ Done.");
     }
 
-
-
     private static DbConnectionFactory.DbEngine readSharedEngine() {
-        System.out.print("Database engine for both DBs (mysql/oracle, default: mysql): ");
-        String engineInput = scanner.nextLine();
-        return DbConnectionFactory.DbEngine.from(engineInput);
+        System.out.print("Database engine (mysql/oracle): ");
+        return DbConnectionFactory.DbEngine.from(scanner.nextLine());
     }
 
+    private static DbConnectionFactory.DbConfig readDbConfig(DbConnectionFactory.DbEngine engine) {
 
-//    private static DbConnectionFactory.DbConfig readDbConfig(DbConnectionFactory.DbEngine engine) {
-//
-//        System.out.print("Database name: ");
-//        String name = scanner.nextLine();
-//
-//        System.out.print("Host (default: localhost): ");
-//        String host = scanner.nextLine();
-//
-//        String defaultPort = engine == DbConnectionFactory.DbEngine.ORACLE ? "1521" : "3306";
-//        System.out.print("Port (default: " + defaultPort + "): ");
-//        String port = scanner.nextLine();
-//
-//        System.out.print("User: ");
-//        String user = scanner.nextLine();
-//
-//        System.out.print("Password: ");
-//        String pass = scanner.nextLine();
-//
-//        DbConnectionFactory.DbConfig def = DbConnectionFactory.getDefaultConfig(name, engine);
-//
-//        return new DbConnectionFactory.DbConfig(
-//            engine,
-//                name,
-//                host.isEmpty() ? def.getHost() : host,
-//                port.isEmpty() ? def.getPort() : port,
-//                user,
-//                pass,
-//                def.getParams()
-//        );
-//    }
-//
-private static DbConnectionFactory.DbConfig readDbConfig(DbConnectionFactory.DbEngine engine) {
+        String defaultPort = engine == DbConnectionFactory.DbEngine.ORACLE ? "1521" : "3306";
 
-    // 🔥 DEFAULT VALUES (change them once here)
-    String defaultName = "XEPDB1";
-    String defaultHost = "localhost";
-    String defaultPort = engine == DbConnectionFactory.DbEngine.ORACLE ? "1521" : "3306";
-    String defaultUser = "d1";
-    String defaultPass = "1234";
+        System.out.print("Database name: ");
+        String name = scanner.nextLine();
 
-    System.out.print("Database name [" + defaultName + "]: ");
-    String name = scanner.nextLine();
-    if (name.isEmpty()) name = defaultName;
+        System.out.print("Host (localhost): ");
+        String host = scanner.nextLine();
+        if (host.isEmpty()) host = "localhost";
 
-    System.out.print("Host [" + defaultHost + "]: ");
-    String host = scanner.nextLine();
-    if (host.isEmpty()) host = defaultHost;
+        System.out.print("Port (" + defaultPort + "): ");
+        String port = scanner.nextLine();
+        if (port.isEmpty()) port = defaultPort;
 
-    System.out.print("Port [" + defaultPort + "]: ");
-    String port = scanner.nextLine();
-    if (port.isEmpty()) port = defaultPort;
+        System.out.print("User: ");
+        String user = scanner.nextLine();
 
-    System.out.print("User [" + defaultUser + "]: ");
-    String user = scanner.nextLine();
-    if (user.isEmpty()) user = defaultUser;
+        System.out.print("Password: ");
+        String pass = scanner.nextLine();
 
-    System.out.print("Password [" + defaultPass + "]: ");
-    String pass = scanner.nextLine();
-    if (pass.isEmpty()) pass = defaultPass;
+        DbConnectionFactory.DbConfig def = DbConnectionFactory.getDefaultConfig(name, engine);
 
-    DbConnectionFactory.DbConfig def = DbConnectionFactory.getDefaultConfig(name, engine);
+        return new DbConnectionFactory.DbConfig(
+                engine, name, host, port, user, pass, def.getParams()
+        );
+    }
 
-    return new DbConnectionFactory.DbConfig(
-            engine,
-            name,
-            host,
-            port,
-            user,
-            pass,
-            def.getParams()
-    );
-}
+    // ✅ IMPORTANT FIX
+    private static Set<String> readOptions(DbConnectionFactory.DbEngine engine) {
 
-    private static Set<String> readOptions() {
-        System.out.println("\nSelect comparison options (comma separated):");
-        System.out.println("1. tables");
-        System.out.println("2. columns");
-        System.out.println("3. data");
-        System.out.println("4. types");
-        System.out.println("5. functions");
-        System.out.println("6. procedures");
-        System.out.println("7. triggers");
-        System.out.println("8. packages");
-        System.out.println("9. all");
+        System.out.println("\nOptions:");
+        System.out.println("1.tables  2.columns  3.data  4.types");
+        System.out.println("5.functions 6.procedures 7.triggers");
 
-        System.out.print("Your choice: ");
+        if (engine == DbConnectionFactory.DbEngine.ORACLE) {
+            System.out.println("8.packages");
+        }
+
+        System.out.println("9.all");
+
         String input = scanner.nextLine().toLowerCase();
-
         Set<String> set = new HashSet<>();
 
-        if (input.contains("all") || input.contains("9")) {
-            return new HashSet<>(Arrays.asList(
-                    "tables", "columns", "data", "types",
-                    "functions", "procedures", "triggers", "packages"
+        if (input.contains("9") || input.contains("all")) {
+
+            set.addAll(Arrays.asList(
+                    "tables","columns","data","types",
+                    "functions","procedures","triggers"
             ));
+
+            if (engine == DbConnectionFactory.DbEngine.ORACLE) {
+                set.add("packages");
+            }
+
+            return set;
         }
 
         for (String s : input.split(",")) {
-            String normalized = normalizeOptionToken(s);
-            if (!normalized.isEmpty()) {
-                set.add(normalized);
-            }
+
+            String opt = normalize(s);
+
+            if ("packages".equals(opt) &&
+                engine != DbConnectionFactory.DbEngine.ORACLE) continue;
+
+            if (!opt.isEmpty()) set.add(opt);
         }
 
         return set;
     }
 
-    private static String normalizeOptionToken(String token) {
-        String t = token == null ? "" : token.trim().toLowerCase(Locale.ROOT);
-        if (t.isEmpty()) return "";
-
-        if ("1".equals(t)) return "tables";
-        if ("2".equals(t)) return "columns";
-        if ("3".equals(t)) return "data";
-        if ("4".equals(t)) return "types";
-        if ("5".equals(t)) return "functions";
-        if ("6".equals(t)) return "procedures";
-        if ("7".equals(t)) return "triggers";
-        if ("8".equals(t)) return "packages";
-        if ("9".equals(t)) return "all";
-
+    private static String normalize(String t) {
+        t = t.trim();
+        switch (t) {
+            case "1": return "tables";
+            case "2": return "columns";
+            case "3": return "data";
+            case "4": return "types";
+            case "5": return "functions";
+            case "6": return "procedures";
+            case "7": return "triggers";
+            case "8": return "packages";
+            case "9": return "all";
+        }
         return t;
     }
-
-
 
     private static Set<String> selectTables(DbConnectionFactory.DbConfig c1,
                                             DbConnectionFactory.DbConfig c2) {
@@ -189,139 +148,104 @@ private static DbConnectionFactory.DbConfig readDbConfig(DbConnectionFactory.DbE
         List<String> shared = CompareDataService.getSharedTablesBetweenDbs(c1, c2);
 
         if (shared.isEmpty()) {
-            System.out.println("❌ No common tables found.");
+            System.out.println("No tables.");
             return null;
         }
 
-        System.out.println("\nAvailable tables:");
         for (int i = 0; i < shared.size(); i++) {
-            System.out.println((i + 1) + ". " + shared.get(i));
+            System.out.println((i+1)+". "+shared.get(i));
         }
 
-        System.out.println("\nSelect tables (e.g: 1,2,3 or 'all'): ");
         String input = scanner.nextLine();
 
-        if (input.equalsIgnoreCase("all")) {
-            return new HashSet<>(shared);
-        }
+        if (input.equalsIgnoreCase("all")) return new HashSet<>(shared);
 
-        Set<String> selected = new HashSet<>();
-
+        Set<String> set = new HashSet<>();
         for (String s : input.split(",")) {
-            int idx = Integer.parseInt(s.trim()) - 1;
-            if (idx >= 0 && idx < shared.size()) {
-                selected.add(shared.get(idx));
-            }
+            int i = Integer.parseInt(s.trim()) - 1;
+            if (i >= 0 && i < shared.size()) set.add(shared.get(i));
         }
 
-        return selected;
+        return set;
     }
-
-
 
     private static String runComparisons(DbConnectionFactory.DbConfig c1,
                                          DbConnectionFactory.DbConfig c2,
                                          Set<String> tables,
                                          Set<String> options) {
-        String db1Label = DbLabelUtils.displayName(c1);
-        String db2Label = DbLabelUtils.displayName(c2);
 
-        Map<String, List<String>> typeResult = null;
-        Map<String, List<String>> columnResult = null;
-        Map<String, List<String>> dataResult = null;
-        Map<String, List<String>> functionResult = null;
-        Map<String, List<String>> procedureResult = null;
-        Map<String, List<String>> triggerResult = null;
-        Map<String, List<String>> packageResult = null;
+        String db1 = DbLabelUtils.displayName(c1);
+        String db2 = DbLabelUtils.displayName(c2);
 
-        if (options.contains("tables")) {
-            System.out.println("\n========== COMPARE TABLES ==========");
-            CompareTablesDb.compareTables(c1, c2);
-        }
+        Map<String,List<String>> typeR=null, colR=null, dataR=null;
+        Map<String,List<String>> funR=null, procR=null, trigR=null, packR=null;
+
+        if (options.contains("tables"))
+            CompareTablesDb.compareTables(c1,c2);
 
         if (options.contains("columns")) {
-            System.out.println("\n========== COMPARE COLUMNS ==========");
-            columnResult = CompareDataService.compareColumnsApi(c1, c2, tables);
-            TablePrinter.printColumnComparison(columnResult, db1Label, db2Label);
+            colR = CompareDataService.compareColumnsApi(c1,c2,tables);
+            TablePrinter.printColumnComparison(colR, db1, db2);
         }
 
         if (options.contains("data")) {
-            System.out.println("\n========== COMPARE DATA ==========");
-            dataResult = CompareDataService.compareDataApi(c1, c2, tables);
-            TablePrinter.printDataComparison(dataResult, db1Label, db2Label);
+            dataR = CompareDataService.compareDataApi(c1,c2,tables);
+            TablePrinter.printDataComparison(dataR, db1, db2);
         }
 
         if (options.contains("types")) {
-            System.out.println("\n========== COMPARE TYPES ==========");
-            typeResult = CompareDataService.compareTypesApi(c1, c2, tables);
-            TablePrinter.printTypeComparison(typeResult, db1Label, db2Label);
+            typeR = CompareDataService.compareTypesApi(c1,c2,tables);
+            TablePrinter.printTypeComparison(typeR, db1, db2);
         }
 
         if (options.contains("functions")) {
-            System.out.println("\n========== COMPARE FUNCTIONS ==========");
-            List<DbObjectDiff> funcDiffs = CompareFuncDB.compareFunctionsDiffs(c1, c2);
-            TablePrinter.printDiffsFunction(funcDiffs, db1Label, db2Label);
-            functionResult = CompareFuncDB.diffsToMap("functions", funcDiffs, db1Label, db2Label);
+            List<DbObjectDiff> d = CompareFuncDB.compareFunctionsDiffs(c1,c2);
+            TablePrinter.printDiffsFunction(d, db1, db2);
+            funR = CompareFuncDB.diffsToMap("functions", d, db1, db2);
         }
 
         if (options.contains("procedures")) {
-            System.out.println("\n========== COMPARE PROCEDURES ==========");
-            List<DbObjectDiff> procDiffs = CompareFuncDB.compareProceduresDiffs(c1, c2);
-            TablePrinter.printDiffsProcedure(procDiffs, db1Label, db2Label);
-            procedureResult = CompareFuncDB.diffsToMap("procedures", procDiffs, db1Label, db2Label);
+            List<DbObjectDiff> d = CompareFuncDB.compareProceduresDiffs(c1,c2);
+            TablePrinter.printDiffsProcedure(d, db1, db2);
+            procR = CompareFuncDB.diffsToMap("procedures", d, db1, db2);
         }
 
         if (options.contains("triggers")) {
-            System.out.println("\n========== COMPARE TRIGGERS ==========");
-            List<DbObjectDiff> trigDiffs = CompareFuncDB.compareTriggersDiffs(c1, c2);
-            TablePrinter.printDiffsTrigger(trigDiffs, db1Label, db2Label);
-            triggerResult = CompareFuncDB.diffsToMap("triggers", trigDiffs, db1Label, db2Label);
+            List<DbObjectDiff> d = CompareFuncDB.compareTriggersDiffs(c1,c2);
+            TablePrinter.printDiffsTrigger(d, db1, db2);
+            trigR = CompareFuncDB.diffsToMap("triggers", d, db1, db2);
         }
 
-        if (options.contains("packages")) {
-            System.out.println("\n========== COMPARE PACKAGES ==========");
-            List<DbObjectDiff> pkgDiffs = CompareFuncDB.comparePackagesDiffs(c1, c2);
-            TablePrinter.printDiffsPackage(pkgDiffs, db1Label, db2Label);
-            packageResult = CompareFuncDB.diffsToMap("packages", pkgDiffs, db1Label, db2Label);
+        // ✅ ORACLE ONLY
+        if (options.contains("packages") &&
+            c1.getEngine() == DbConnectionFactory.DbEngine.ORACLE) {
+
+            List<DbObjectDiff> d = CompareFuncDB.comparePackagesDiffs(c1,c2);
+            TablePrinter.printDiffsPackage(d, db1, db2);
+            packR = CompareFuncDB.diffsToMap("packages", d, db1, db2);
         }
 
-        String reportPath = buildExportPath(c1, c2);
+        String path = buildPath(c1,c2);
+
         ExportExcel.exportAll(
-                reportPath,
-                c1,
-                c2,
-                typeResult,
-                columnResult,
-                dataResult,
-                tables == null ? Collections.<String>emptyList() : new ArrayList<String>(tables),
-                functionResult,
-                procedureResult,
-                triggerResult,
-                packageResult);
+                path,c1,c2,
+                typeR,colR,dataR,
+                tables==null?Collections.emptyList():new ArrayList<>(tables),
+                funR,procR,trigR,packR
+        );
 
-        return reportPath;
+        return path;
     }
 
-    private static String buildExportPath(DbConnectionFactory.DbConfig db1Config,
-                                          DbConnectionFactory.DbConfig db2Config) {
-        File dir = new File("output");
-        if (!dir.exists()) {
-            dir.mkdirs();
-        }
+    private static String buildPath(DbConnectionFactory.DbConfig d1,
+                                    DbConnectionFactory.DbConfig d2) {
 
-        String timestamp = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
-        return new File(dir,
-                "comparison_console_"
-                        + sanitizeFileName(db1Config.getDatabaseName())
-                        + "_vs_"
-                        + sanitizeFileName(db2Config.getDatabaseName())
-                        + "_"
-                        + timestamp
-                        + ".xlsx").getPath();
-    }
+        File f = new File("output");
+        if (!f.exists()) f.mkdirs();
 
-    private static String sanitizeFileName(String value) {
-        return value == null ? "db" : value.replaceAll("[^A-Za-z0-9._-]", "_");
+        String t = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss")
+                .format(new java.util.Date());
+
+        return "output/compare_"+d1.getDatabaseName()+"_vs_"+d2.getDatabaseName()+"_"+t+".xlsx";
     }
 }
-
