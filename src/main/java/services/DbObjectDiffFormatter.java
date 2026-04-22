@@ -229,10 +229,50 @@ public final class DbObjectDiffFormatter {
             }
 
             StringBuilder sb = new StringBuilder();
+            java.util.List<DbObjectDiff.SubProgramDiff> missingInD1 = new java.util.ArrayList<DbObjectDiff.SubProgramDiff>();
+            java.util.List<DbObjectDiff.SubProgramDiff> missingInD2 = new java.util.ArrayList<DbObjectDiff.SubProgramDiff>();
+            int changedCount = 0;
+            int sameCount = 0;
+            for (DbObjectDiff.SubProgramDiff sp : diff.getSubProgramDiffs()) {
+                if ("MISSING_IN_D1".equals(sp.getStatus())) {
+                    missingInD1.add(sp);
+                } else if ("MISSING_IN_D2".equals(sp.getStatus())) {
+                    missingInD2.add(sp);
+                } else if ("DIFFERENT".equals(sp.getStatus())) {
+                    changedCount++;
+                } else {
+                    sameCount++;
+                }
+            }
+
             if (diff.getSimilarity() >= 0) {
                 sb.append("Similarity: ").append(String.format("%.0f%%", diff.getSimilarity() * 100)).append("\n");
             }
+            sb.append("Sub-programs: ")
+              .append(changedCount).append(" changed, ")
+              .append(sameCount).append(" unchanged");
+            if (!missingInD2.isEmpty() || !missingInD1.isEmpty()) {
+                sb.append(", ").append(missingInD2.size() + missingInD1.size()).append(" missing");
+            }
+
+            if (!missingInD2.isEmpty() || !missingInD1.isEmpty()) {
+                sb.append("\nMissing sub-programs:");
+                for (DbObjectDiff.SubProgramDiff sp : missingInD2) {
+                    sb.append("\n- ")
+                      .append(sp.getType()).append(" ")
+                      .append(sp.getName()).append(" -> Missing in D2");
+                }
+                for (DbObjectDiff.SubProgramDiff sp : missingInD1) {
+                    sb.append("\n- ")
+                      .append(sp.getType()).append(" ")
+                      .append(sp.getName()).append(" -> Missing in D1");
+                }
+            }
+
             for (DbObjectDiff.SubProgramDiff sp : diff.getSubProgramDiffs()) {
+                if ("MISSING_IN_D1".equals(sp.getStatus()) || "MISSING_IN_D2".equals(sp.getStatus())) {
+                    continue;
+                }
                 if (sb.length() > 0 && sb.charAt(sb.length() - 1) != '\n') sb.append("\n");
                 sb.append(sp.getName())
                   .append(" -> ")

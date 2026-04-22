@@ -496,15 +496,42 @@ public class TablePrinter {
         // ===== COUNT =====
         int changedCount = 0;
         int sameCount = 0;
+        int missingCount = 0;
+        List<DbObjectDiff.SubProgramDiff> missingInD1 = new ArrayList<>();
+        List<DbObjectDiff.SubProgramDiff> missingInD2 = new ArrayList<>();
 
         for (DbObjectDiff.SubProgramDiff sp : subs) {
-            if ("DIFFERENT".equals(sp.getStatus())) changedCount++;
-            else sameCount++;
+            if ("DIFFERENT".equals(sp.getStatus())) {
+                changedCount++;
+            } else if ("MISSING_IN_D1".equals(sp.getStatus())) {
+                missingCount++;
+                missingInD1.add(sp);
+            } else if ("MISSING_IN_D2".equals(sp.getStatus())) {
+                missingCount++;
+                missingInD2.add(sp);
+            } else {
+                sameCount++;
+            }
         }
 
         sb.append("\nSub-programs: ")
                 .append(changedCount).append(" changed, ")
                 .append(sameCount).append(" unchanged");
+        if (missingCount > 0) {
+            sb.append(", ").append(missingCount).append(" missing");
+        }
+
+        if (!missingInD1.isEmpty() || !missingInD2.isEmpty()) {
+            sb.append("\nMissing sub-programs:");
+            for (DbObjectDiff.SubProgramDiff sp : missingInD2) {
+                sb.append("\n- ").append(sp.getType()).append(" ").append(sp.getName())
+                  .append(" -> Missing in D2");
+            }
+            for (DbObjectDiff.SubProgramDiff sp : missingInD1) {
+                sb.append("\n- ").append(sp.getType()).append(" ").append(sp.getName())
+                  .append(" -> Missing in D1");
+            }
+        }
 
         // ===== LOOP SUBPROGRAMS =====
         for (DbObjectDiff.SubProgramDiff sp : subs) {

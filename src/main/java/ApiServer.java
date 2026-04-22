@@ -26,7 +26,7 @@ public class ApiServer {
         final CompareService service = new CompareService();
 
         before((req, res) -> {
-            res.header("Access-Control-Allow-Origin", "http://localhost:4200");
+            res.header("Access-Control-Allow-Origin", "http://localhost:4201");
             res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
             res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
 

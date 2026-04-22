@@ -100,7 +100,7 @@ public class DbObjectDiff {
     public static class SubProgramDiff {
         private final String name;
         private final String type;   // "PROCEDURE" or "FUNCTION"
-        private final String status; // "DIFFERENT", "SAME", or "PRESENT"
+        private final String status; // "DIFFERENT", "SAME", "PRESENT", "MISSING_IN_D1", "MISSING_IN_D2"
         private final int startLine;
         private final int endLine;
         private final List<Integer> changedLineNumbers;
